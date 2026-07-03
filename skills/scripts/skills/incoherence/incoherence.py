@@ -159,7 +159,7 @@ SELECTION RULES:
 
 
 
-def format_incoherence_output(step, phase, agent_type, guidance):
+def format_incoherence_output(step, phase, agent_type, guidance, total):
     """Format output using AST builder API."""
     parts = []
     title = f"INCOHERENCE [{phase}] [{agent_type}]"
@@ -674,7 +674,7 @@ def main(
         phase = "APPLICATION"
 
     output = format_incoherence_output(
-        args.step_number, phase, agent_type, guidance
+        args.step_number, phase, agent_type, guidance, WORKFLOW.total_steps
     )
     print(output)
 

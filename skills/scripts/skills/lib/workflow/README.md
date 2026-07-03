@@ -117,7 +117,8 @@ causes module identity issues (imported by `__init__.py` vs executed as
 Shared enums and dataclasses: `AgentRole`, `Confidence`, `Phase`/`Mode` (+
 `PHASE_TO_MODE`), routing types (`LinearRouting`/`BranchRouting`/
 `TerminalRouting`, `FlatCommand`/`BranchCommand`), `Dispatch`,
-`StepGuidance`, and `BoundedInt` (test input domain).
+`StepGuidance`, and the test input domains (`BoundedInt`, `ChoiceSet`,
+`Constant`).
 
 `ResourceProvider` is a Protocol rather than a concrete import: QR/TW/Dev
 modules receive it instead of importing `skills.planner.shared.resources`

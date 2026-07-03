@@ -233,6 +233,28 @@ class BoundedInt:
         return iter(range(self.lo, self.hi + 1))
 
 
+@dataclass(frozen=True)
+class ChoiceSet:
+    """Discrete choice domain."""
+
+    choices: tuple
+
+    def __iter__(self):
+        """Yield all choices in order."""
+        return iter(self.choices)
+
+
+@dataclass(frozen=True)
+class Constant:
+    """Single-value domain."""
+
+    value: Any
+
+    def __iter__(self):
+        """Yield single value for uniform Cartesian product interface."""
+        return iter([self.value])
+
+
 # =============================================================================
 # Question Relay Types
 # =============================================================================

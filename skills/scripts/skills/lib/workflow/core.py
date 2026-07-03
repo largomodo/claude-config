@@ -60,6 +60,10 @@ class Workflow:
         self.steps = {s.id: s for s in steps}
         self._step_order = [s.id for s in steps]
         self.entry_point = entry_point or steps[0].id
+        # Param registry read by the test generator (tests/test_generation.py).
+        # Signature-based extraction left with the execution engine; currently
+        # registered workflows declare no params, so this stays empty.
+        self._params: dict[str, list[dict]] = {}
 
         if validate:
             self._validate()
