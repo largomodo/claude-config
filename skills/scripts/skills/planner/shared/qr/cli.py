@@ -12,7 +12,7 @@ import argparse
 def add_qr_args(parser: argparse.ArgumentParser) -> None:
     """Add standard QR verification arguments to argument parser.
 
-    Used by orchestrator scripts (planner.py, executor.py, wave-executor.py)
+    Used by orchestrator scripts (planner.py, executor.py)
     to ensure consistent QR-related CLI flags.
     """
     parser.add_argument("--qr-status", type=str, choices=["pass", "fail"],

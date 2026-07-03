@@ -12,9 +12,8 @@ QR Gate Pattern for Verification Loops:
   Work steps detect fix mode via qr-{phase}.json file state inspection.
 
 This pattern is applied consistently across:
-  - planner.py (steps 5-12: sequential QR with gates)
-  - executor.py (step 4-5: holistic QR with gate)
-  - wave-executor.py (steps 2-3: batch QR with gate)
+  - planner.py (route steps 6, 10, 14)
+  - executor.py (route steps 5, 9)
 """
 
 # Re-export from resources

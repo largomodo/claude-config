@@ -254,3 +254,6 @@ identical QR block prompts and cannot drift apart.
 4. Frozen plan.json is immutable (frozen_at timestamp means no writes)
 5. qr-{phase}.json files are ephemeral (exist only during QR cycle)
 6. QR iteration blocking: iter 1-2 all; iter 3-4 MUST/SHOULD; iter 5+ MUST only
+7. Wave coordination assumes sub-agents can spawn sub-agents (Claude Code
+   v2.1.172+): executor step 2 dispatches one developer that coordinates
+   parallel Task(developer) calls per wave

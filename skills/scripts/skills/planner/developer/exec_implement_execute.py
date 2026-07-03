@@ -95,7 +95,9 @@ def get_step_guidance(
                 "If tests fail:",
                 "  - Clear problem + solution: Task(developer) immediately",
                 "  - Difficult/unclear: Task(debugger) to diagnose first",
-                "  - Uncertain: AskUserQuestion with options",
+                "  - Uncertain: emit <needs_user_input> XML and stop;",
+                "    the orchestrator relays the question to the user",
+                "    and reinvokes you fresh with the answer",
             ],
             "next": f"python3 -m {MODULE_PATH} --step 4{state_dir_arg}",
         }

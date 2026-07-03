@@ -24,6 +24,7 @@ import sys
 import tempfile
 
 from skills.lib.workflow.types import AgentRole
+from skills.lib.workflow.constants import QUESTION_RELAY_HANDLER
 from skills.lib.workflow.prompts import subagent_dispatch
 from skills.lib.workflow.prompts.step import format_step
 from skills.planner.shared.qr.types import QRState, QRStatus, LoopState
@@ -248,6 +249,7 @@ STEPS = {
             "  - Milestones within same wave: PARALLEL dispatch",
             "  - Waves: SEQUENTIAL",
             "Use waves identified in step 1.",
+            QUESTION_RELAY_HANDLER,
         ],
     ),
     3: qr_decompose_step(
@@ -274,6 +276,9 @@ STEPS = {
         agent="technical-writer",
         script="technical_writer/exec_docs.py",
         phase="impl-docs",
+        post_dispatch=[
+            QUESTION_RELAY_HANDLER,
+        ],
     ),
     7: qr_decompose_step(
         title="impl-docs-qr-decompose",
