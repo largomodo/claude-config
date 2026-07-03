@@ -6,8 +6,8 @@ Reference documentation for analyzing Claude Code conversation history files.
 
 | File      | What                                      | When to read                        |
 | --------- | ----------------------------------------- | ----------------------------------- |
-| SKILL.md  | Query patterns and command reference      | Analyzing conversation history      |
-| README.md | Design decisions and structural knowledge | Understanding format and trade-offs |
+| `SKILL.md`  | Query patterns and command reference      | Analyzing conversation history      |
+| `README.md` | Design decisions and structural knowledge | Understanding format and trade-offs |
 
 ## Related Directories
 

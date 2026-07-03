@@ -77,7 +77,6 @@ __all__ = [
     "get_resource",
     "get_mode_script_path",
     "get_exhaustiveness_prompt",
-    "get_qa_schema",
     "load_context_block",
     "STATE_DIR_ARG_REQUIRED",
     "get_context_path",
@@ -148,15 +147,16 @@ def get_mode_script_path(script_name: str) -> str:
     """Get module path for -m invocation.
 
     Mode scripts provide step-based workflows for sub-agents.
-    Scripts are organized by agent: qr/, dev/, tw/
+    Scripts are organized by agent: architect/, developer/,
+    technical_writer/, quality_reviewer/
 
     Args:
-        script_name: Script path relative to planner/ (e.g., "qr/plan-docs.py")
+        script_name: Script path relative to planner/ (e.g., "developer/plan_code.py")
 
     Returns:
-        Module path for python3 -m (e.g., "skills.planner.qr.plan_docs")
+        Module path for python3 -m (e.g., "skills.planner.developer.plan_code")
     """
-    # Convert path to module: "qr/plan-docs.py" -> "qr.plan_docs"
+    # Convert path to module: "developer/plan-code.py" -> "developer.plan_code"
     module = script_name.replace("/", ".").replace("-", "_").removesuffix(".py")
     return f"skills.planner.{module}"
 
@@ -184,18 +184,6 @@ def get_exhaustiveness_prompt() -> list[str]:
         "second examination finds nothing new.",
         "</exhaustiveness_check>",
     ]
-
-
-def get_qa_schema() -> str:
-    """Return QA state schema documentation.
-
-    QA state tracks verification tasks across decomposition iterations.
-    Schema defines structure for qa.yaml state file.
-
-    Returns:
-        Full content of qa-schema.md resource
-    """
-    return get_resource("qa-schema.md")
 
 
 def load_context_block(context_file: str | None) -> list[str]:

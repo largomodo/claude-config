@@ -4,10 +4,11 @@ Source papers organized by problem type (what they solve, not how they execute).
 
 ## Files
 
-| File             | What                    | When to read                    |
-| ---------------- | ----------------------- | ------------------------------- |
-| `README.md`      | Taxonomy and navigation | Classifying papers, finding fit |
-| `.gitattributes` | LFS config              | Never                           |
+| File                       | What                             | When to read                    |
+| -------------------------- | -------------------------------- | ------------------------------- |
+| `README.md`                | Taxonomy and navigation          | Classifying papers, finding fit |
+| `CATEGORY_DESCRIPTIONS.md` | Category definitions for sorting | Classifying new papers          |
+| `.gitattributes`           | LFS config                       | Never                           |
 
 ## Subdirectories
 

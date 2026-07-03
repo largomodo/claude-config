@@ -17,6 +17,7 @@
 
 # Track root files
 !README.md
+!CLAUDE.md
 !LICENSE
 !.gitignore
 

@@ -267,9 +267,9 @@ INITIAL -> (QRStatus.NEEDS_CHANGES) -> RETRY -> (iteration++) -> RETRY -> ...
 
 QR gates invoke QA decomposition before performing reviews:
 
-1. QR gate triggered (e.g., plan_completeness)
-2. Invoke qa/decompose.py to generate verification items
-3. Spawn verifiers (parallel for micro, sequential for macro)
+1. QR phase triggered (e.g., impl-code)
+2. Invoke the phase's decompose script ({phase}_qr_decompose.py) to generate verification items
+3. Spawn verifiers in parallel ({phase}_qr_verify.py --qr-item ...)
 4. Aggregate results into qr-{phase}.json
 5. Route on aggregation result:
    - PASS: proceed to next workflow step

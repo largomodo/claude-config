@@ -102,81 +102,92 @@ Phases: `qr-plan-design`, `qr-plan-code`, `qr-plan-docs`, `qr-impl-code`, `qr-im
 
 ## Workflow Phases and Mutations
 
-### Planner Workflow (11 steps)
+### Planner Workflow (14 steps)
 
-| Step | Name                | Pattern Function          | Mutates              | Agent        |
-| ---- | ------------------- | ------------------------- | -------------------- | ------------ |
-| 1    | plan-init           | `init_step()`             | Creates plan.json    | Orchestrator |
-| 2    | context-verify      | `verify_step()`           | Creates context.json | Orchestrator |
-| 3    | plan-design-execute | `execute_dispatch_step()` | plan.json            | Architect    |
-| 4    | plan-design-qr      | `qr_dispatch_step()`      | qr-plan-design.json  | QR           |
-| 5    | plan-design-qr-gate | `qr_gate_step()`          | -                    | Orchestrator |
-| 6    | plan-code-execute   | `execute_dispatch_step()` | plan.json            | Developer    |
-| 7    | plan-code-qr        | `qr_dispatch_step()`      | qr-plan-code.json    | QR           |
-| 8    | plan-code-qr-gate   | `qr_gate_step()`          | -                    | Orchestrator |
-| 9    | plan-docs-execute   | `execute_dispatch_step()` | plan.json            | TW           |
-| 10   | plan-docs-qr        | `qr_dispatch_step()`      | qr-plan-docs.json    | QR           |
-| 11   | plan-docs-qr-gate   | `qr_gate_step()`          | Sets frozen_at       | Orchestrator |
+Each phase runs a 4-step QR block: work -> decompose -> verify(N parallel) -> route.
+
+| Step | Name                    | Pattern Function          | Mutates              | Agent            |
+| ---- | ----------------------- | ------------------------- | -------------------- | ---------------- |
+| 1    | plan-init               | `init_step()`             | Creates plan.json    | Orchestrator     |
+| 2    | context-verify          | `verify_step()`           | Creates context.json | Orchestrator     |
+| 3    | plan-design-work        | `execute_dispatch_step()` | plan.json            | Architect        |
+| 4    | plan-design-qr-decompose| `qr_decompose_step()`     | qr-plan-design.json  | QR               |
+| 5    | plan-design-qr-verify   | `qr_verify_step()`        | qr-plan-design.json  | QR (N parallel)  |
+| 6    | plan-design-qr-route    | `qr_route_step()`         | -                    | Orchestrator     |
+| 7    | plan-code-work          | `execute_dispatch_step()` | plan.json            | Developer        |
+| 8    | plan-code-qr-decompose  | `qr_decompose_step()`     | qr-plan-code.json    | QR               |
+| 9    | plan-code-qr-verify     | `qr_verify_step()`        | qr-plan-code.json    | QR (N parallel)  |
+| 10   | plan-code-qr-route      | `qr_route_step()`         | -                    | Orchestrator     |
+| 11   | plan-docs-work          | `execute_dispatch_step()` | plan.json            | TW               |
+| 12   | plan-docs-qr-decompose  | `qr_decompose_step()`     | qr-plan-docs.json    | QR               |
+| 13   | plan-docs-qr-verify     | `qr_verify_step()`        | qr-plan-docs.json    | QR (N parallel)  |
+| 14   | plan-docs-qr-route      | `qr_route_step()`         | Renders plan.md      | Orchestrator     |
 
 **Mutation details**:
 
 - Step 3 (Architect): Populates planning_context, milestones[], code_intents[], invisible_knowledge
-- Step 6 (Developer): Populates code_changes[] per milestone
-- Step 9 (TW): Populates documentation[] per milestone, creates plan.md
+- Step 7 (Developer): Populates code_changes[] per milestone
+- Step 11 (TW): Populates documentation[] per milestone; plan.md rendered on terminal gate pass
 
-### Executor Workflow (9 steps)
+### Executor Workflow (10 steps)
 
-| Step | Name              | Mutates           | Agent        |
-| ---- | ----------------- | ----------------- | ------------ |
-| 1    | init              | -                 | Orchestrator |
-| 2    | load-verify       | -                 | Orchestrator |
-| 3    | impl-execute      | Codebase files    | Developer    |
-| 4    | impl-code-qr      | qr-impl-code.json | QR           |
-| 5    | impl-code-qr-gate | -                 | Orchestrator |
-| 6    | impl-docs-execute | Codebase docs     | TW           |
-| 7    | impl-docs-qr      | qr-impl-docs.json | QR           |
-| 8    | impl-docs-qr-gate | -                 | Orchestrator |
-| 9    | reconcile         | -                 | QR           |
+Same QR block pattern as the planner, per implementation phase.
+
+| Step | Name                    | Pattern Function          | Mutates           | Agent            |
+| ---- | ----------------------- | ------------------------- | ----------------- | ---------------- |
+| 1    | exec-init               | `exec_init_step()`        | Creates state dir | Orchestrator     |
+| 2    | impl-code-work          | `execute_dispatch_step()` | Codebase files    | Developer        |
+| 3    | impl-code-qr-decompose  | `qr_decompose_step()`     | qr-impl-code.json | QR               |
+| 4    | impl-code-qr-verify     | `qr_verify_step()`        | qr-impl-code.json | QR (N parallel)  |
+| 5    | impl-code-qr-route      | `qr_route_step()`         | -                 | Orchestrator     |
+| 6    | impl-docs-work          | `execute_dispatch_step()` | Codebase docs     | TW               |
+| 7    | impl-docs-qr-decompose  | `qr_decompose_step()`     | qr-impl-docs.json | QR               |
+| 8    | impl-docs-qr-verify     | `qr_verify_step()`        | qr-impl-docs.json | QR (N parallel)  |
+| 9    | impl-docs-qr-route      | `qr_route_step()`         | -                 | Orchestrator     |
+| 10   | wave-next               | `wave_next_step()`        | -                 | Orchestrator     |
+
+Reconciliation (validating existing code against the plan before executing)
+is not a numbered step: step 1 re-invoked with `--reconciliation-check`
+emits a per-milestone `exec_reconcile.py` dispatch block.
 
 ## Components
 
 ```
 orchestrator/
-  planner.py      11-step planning workflow
-  executor.py     9-step execution workflow
+  planner.py      14-step planning workflow
+  executor.py     10-step execution workflow
 
 architect/
-  plan_design.py  Plan creation (exploration, milestones, code_intents)
+  plan_design.py  Router; plan_design_execute.py / plan_design_qr_fix.py
 
 developer/
-  plan_code.py    Code Intent -> Code Changes (unified diffs)
-  exec_implement.py  Wave-aware implementation
+  plan_code.py       Router; plan_code_execute.py / plan_code_qr_fix.py
+  exec_implement.py  Router; exec_implement_execute.py / exec_implement_qr_fix.py
 
 technical_writer/
-  plan_docs.py    Documentation planning (WHY comments, temporal cleanup)
-  exec_docs.py    Post-implementation docs (CLAUDE.md, README.md)
+  plan_docs.py    Router; plan_docs_execute.py / plan_docs_qr_fix.py
+  exec_docs.py    Router; exec_docs_execute.py / exec_docs_qr_fix.py
 
 quality_reviewer/
-  plan_design_qr.py   Plan completeness validation
-  plan_code_qr.py     Code diff validation
-  plan_docs_qr.py     Documentation quality
-  impl_code_qr.py     Post-impl code review
-  impl_docs_qr.py     Post-impl doc review
-  exec_reconcile.py   Plan vs implementation reconciliation
+  {phase}_qr_decompose.py  Per-phase item generation (plan-design, plan-code,
+  {phase}_qr_verify.py     plan-docs, impl-code, impl-docs)
+  qr_verify_base.py        Shared verify base class
+  exec_reconcile.py        Plan vs implementation reconciliation
 
 shared/
+  steps.py        Orchestrator step factories (work/decompose/verify/route),
+                  shared by planner.py and executor.py
+  gates.py        Unified gate output builder
+  schema.py       Pydantic v2 schemas for state files, validate_state()
+  routing.py      Work-phase router registry (execute vs qr_fix)
   resources.py    Path derivation, context loading
-  builders.py     XML output builders
-  constraints.py  Orchestrator constraint AST builders
-  qr/             QR utilities (types, constants, utils, schema)
-
-state/
-  models.py       Pydantic v2 schemas for plan.json
-  validator.py    Validation functions
-  decisions.py    Decision lifecycle enum (reserved for future use)
+  builders.py     Shared string builders
+  constraints.py  Orchestrator constraint builders
+  qr/             QR utilities (types, constants, phases, utils, cli)
 
 cli/
-  plan.py         plan.json manipulation commands
+  plan.py         plan.json manipulation commands (CAS versioning)
+  qr.py           qr-{phase}.json mutation commands (file locking)
 ```
 
 ## QR Gate Mechanics
@@ -210,11 +221,16 @@ def execute_dispatch_step(title, agent, script, ...):
 
 STEPS = {
     1: init_step("plan-init", ...),
-    3: execute_dispatch_step("plan-design-execute", agent="architect", ...),
-    4: qr_dispatch_step("plan-design-qr", ...),
-    5: qr_gate_step("plan-design-qr-gate", ...),
+    3: execute_dispatch_step("plan-design-work", agent="architect", ...),
+    4: qr_decompose_step("plan-design-qr-decompose", phase="plan-design", ...),
+    5: qr_verify_step("plan-design-qr-verify", phase="plan-design"),
+    6: qr_route_step("plan-design-qr-route", work_step=3, pass_step=7, ...),
 }
 ```
+
+The QR block factories live in `shared/steps.py`, parameterized by the
+calling orchestrator's module path, so planner.py and executor.py emit
+identical QR block prompts and cannot drift apart.
 
 ## Design Decisions
 

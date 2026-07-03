@@ -70,6 +70,7 @@ BoundedInt(1, 5) for iteration domain matches QR_ITERATION_LIMIT constant. Hardc
 
 ## Invariants
 
+- All tests live in `tests/` and run through pytest; no test files elsewhere in the codebase
 - Each test case has unique ID (workflow-step-params combination)
 - Conditional params only apply to applicable steps (iteration only at iterating steps)
 - Mode-gated steps skipped when mode value gates them out
@@ -82,4 +83,4 @@ BoundedInt(1, 5) for iteration domain matches QR_ITERATION_LIMIT constant. Hardc
 - pytest available
 - run_skill_invocation() in conftest.py handles subprocess execution
 - MAX_ITERATIONS = 5 standard across workflows
-- Excluded skills: leon-writing-style, prompt-engineer-improver (not in git)
+- Excluded skills (conftest `EXCLUDED` set): leon-writing-style, prompt-engineer-improver

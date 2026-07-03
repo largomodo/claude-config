@@ -720,7 +720,7 @@ Scripts follow router-dispatch pattern. Each QR-able phase has:
 skills/planner/
   orchestrator/
     planner.py       -- 14-step planning workflow
-    executor.py      -- 12-step execution workflow
+    executor.py      -- 10-step execution workflow
   architect/
     plan_design.py            -- router (detects state, dispatches)
     plan_design_execute.py    -- first execution (6 steps)

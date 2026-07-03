@@ -2,10 +2,6 @@
 
 Test suite for skills workflow framework.
 
-## Rules
-
-All tests must live in `tests/` and run through pytest. No test files elsewhere in the codebase.
-
 ## Files
 
 | File                         | What                                                 | When to read                               |
@@ -15,6 +11,7 @@ All tests must live in `tests/` and run through pytest. No test files elsewhere 
 | `test_workflow_import.py`    | Skill module import tests                            | Debugging import failures                  |
 | `test_workflow_structure.py` | Workflow structural validation tests                 | Debugging validation failures              |
 | `test_workflow_steps.py`     | Exhaustive parametrized tests for all workflow steps | Running workflow tests, debugging failures |
+| `test_qr_verify_routing.py`  | QR verify routing tests                              | Debugging QR verify routing                |
 | `test_domain_types.py`       | Unit tests for BoundedInt, ChoiceSet, Constant       | Testing domain type behavior               |
 | `test_generation.py`         | Schema extraction and input generation for tests     | Modifying test case generation             |
 | `test_ast.py`                | Property-based AST node and renderer tests           | Testing AST construction and rendering     |

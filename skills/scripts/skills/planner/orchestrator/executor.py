@@ -2,55 +2,143 @@
 """
 Plan Executor - Execute approved plans through delegation.
 
-Nine-step workflow:
-  1. Execution Planning - analyze plan, build wave list
-  2. Reconciliation - validate existing code (conditional)
-  3. Implementation - dispatch developers (wave-aware parallel)
-  4. Code QR - verify code quality (RULE 0/1/2)
-  5. Code QR Gate - route pass/fail
-  6. Documentation - TW pass
-  7. Doc QR - verify documentation quality
-  8. Doc QR Gate - route pass/fail
-  9. Retrospective - present summary
+10-step execution workflow per INTENT.md:
+
+Flow:
+  1. exec-init (wave analysis; optional reconciliation of existing code)
+  2. impl-code-work (developer sub-agent, wave-aware parallel)
+  3. impl-code-qr-decompose -> 4. verify(N) -> 5. route
+  6. impl-docs-work (technical-writer)
+  7. impl-docs-qr-decompose -> 8. verify(N) -> 9. route
+  10. wave-next (loop to 2 for next wave, or EXECUTION COMPLETE)
+
+QR Block Pattern (4 steps per phase):
+  N   work        1 agent (dev/TW router)        Modified files
+  N+1 decompose   1 agent (QR)                   qr-{phase}.json
+  N+2 verify      N agents (parallel, expanded)  Each: PASS or FAIL
+  N+3 route       0 agents (orchestrator)        Loop to N or proceed to N+4
 """
 
 import argparse
 import sys
+import tempfile
 
 from skills.lib.workflow.types import AgentRole
 from skills.lib.workflow.prompts import subagent_dispatch
 from skills.lib.workflow.prompts.step import format_step
+from skills.planner.shared.qr.types import QRState, QRStatus, LoopState
+from skills.planner.shared.gates import GateResult
 from skills.planner.shared.qr.cli import add_qr_args
-from skills.planner.shared.qr.types import QRState, QRStatus, GateConfig, LoopState
 from skills.planner.shared.resources import get_mode_script_path
-from skills.planner.shared.builders import (
-    THINKING_EFFICIENCY,
-    format_forbidden,
-    format_gate_result,
-    PEDANTIC_ENFORCEMENT,
+from skills.planner.shared.builders import THINKING_EFFICIENCY
+from skills.planner.shared.constants import (
+    EXECUTOR_TOTAL_STEPS,
+    EXECUTOR_GATE_STEPS,
+    validate_step_count,
 )
-from skills.planner.shared.constraints import (
-    ORCHESTRATOR_CONSTRAINT,
-    format_state_banner,
+from skills.planner.shared.steps import (
+    execute_dispatch_step as shared_execute_dispatch_step,
+    qr_decompose_step as shared_qr_decompose_step,
+    qr_verify_step as shared_qr_verify_step,
+    qr_route_step as shared_qr_route_step,
 )
 
 
-# Module path for -m invocation
 MODULE_PATH = "skills.planner.orchestrator.executor"
 
+# Signals in the user request that suggest existing code may already
+# satisfy milestones. Surfaced in step 1 output so the LLM knows when
+# to re-invoke with --reconciliation-check.
+RECONCILIATION_SIGNALS = (
+    "already implemented", "resume", "partially complete",
+    "existing code", "continue from",
+)
 
-def detect_reconciliation_signals(user_request: str) -> bool:
-    """Detect if user request requires reconciliation phase."""
-    signals = ["already implemented", "resume", "partially complete",
-               "existing code", "continue from"]
-    return any(s in user_request.lower() for s in signals)
+
+# =============================================================================
+# Step Pattern Functions
+# =============================================================================
+#
+# QR block factories (work/decompose/verify/route) live in shared/steps.py,
+# shared with planner.py. Wrappers below bind this orchestrator's MODULE_PATH.
+# Only exec_init_step and wave_next_step are executor-specific.
+
+def execute_dispatch_step(title, agent, script, phase=None, post_dispatch=None):
+    """Steps 2, 6: work execution dispatch."""
+    return shared_execute_dispatch_step(
+        MODULE_PATH, title, agent, script, phase=phase,
+        post_dispatch=post_dispatch, fix_banner="IMPL-FIX")
 
 
-STEPS = {
-    1: {
-        "title": "Execution Planning",
-        "actions": [
+def qr_decompose_step(title, phase, script, model=None):
+    """Steps 3, 7: QR decomposition dispatch."""
+    return shared_qr_decompose_step(MODULE_PATH, title, phase, script, model=model)
+
+
+def qr_verify_step(title, phase):
+    """Steps 4, 8: Parallel QR verification with group-aware dispatch."""
+    return shared_qr_verify_step(MODULE_PATH, title, phase)
+
+
+def qr_route_step(title, phase, work_step, pass_step, pass_message, fix_target=None):
+    """Steps 5, 9: Route based on aggregated QR results."""
+    return shared_qr_route_step(
+        MODULE_PATH, "executor", title, phase, work_step, pass_step,
+        pass_message, fix_target=fix_target)
+
+
+def _reconciliation_actions() -> list[str]:
+    """Reconciliation dispatch block for step 1 (--reconciliation-check)."""
+    reconcile_script = get_mode_script_path("quality_reviewer/exec_reconcile.py")
+    dispatch = subagent_dispatch(
+        agent_type="quality-reviewer",
+        command=f"python3 -m {reconcile_script} --step 1 --milestone N",
+    )
+    return [
+        "",
+        "RECONCILIATION: Validate existing code against plan requirements",
+        "BEFORE executing.",
+        "",
+        "For EACH milestone, launch quality-reviewer agent (substitute N):",
+        "",
+        dispatch,
+        "",
+        "Expected output per milestone: SATISFIED | NOT_SATISFIED | PARTIALLY_SATISFIED",
+        "",
+        "ROUTING:",
+        "  SATISFIED           -> Mark milestone complete, skip execution",
+        "  NOT_SATISFIED       -> Execute milestone normally",
+        "  PARTIALLY_SATISFIED -> Execute only missing parts",
+        "",
+        "Parallel execution: May run reconciliation for multiple milestones",
+        "in parallel (multiple Task calls in single response) when milestones",
+        "are independent.",
+    ]
+
+
+def exec_init_step(title):
+    """Step 1: wave analysis; creates state_dir when not provided.
+
+    The state directory holds plan.json (the approved plan) and the
+    qr-{phase}.json files written by QR decompose/verify. When execution
+    follows planning in the same session, pass the planner's STATE_DIR
+    so the frozen plan.json is reused directly.
+    """
+    def handler(ctx):
+        state_dir = ctx["state_dir"]
+        if not state_dir:
+            state_dir = tempfile.mkdtemp(prefix="executor-")
+            print(f"STATE_DIR={state_dir}")
+
+        actions = [
             "Plan file: $PLAN_FILE (substitute from context)",
+            "",
+            "STATE: Ensure STATE_DIR holds plan.json (approved plan) and",
+            "context.json (planning context). QR verify agents read both.",
+            "  - Executing right after planning: pass the planner's STATE_DIR",
+            "    (both files already present).",
+            "  - Fresh session from a plan file: copy the plan's plan.json and",
+            "    context.json into STATE_DIR before step 2.",
             "",
             "ANALYZE plan:",
             "  - Count milestones and parse dependency diagram",
@@ -76,99 +164,47 @@ STEPS = {
             "    Wave 2: [1, 2]    (parallel)",
             "    Wave 3: [3]       (sequential)",
             "    Wave 4: [4]       (sequential)",
+        ]
+
+        if ctx.get("reconciliation_check"):
+            actions.extend(_reconciliation_actions())
+        else:
+            actions.extend([
+                "",
+                "RECONCILIATION CHECK:",
+                f"  IF the user request signals existing work ({', '.join(RECONCILIATION_SIGNALS)}):",
+                f"  re-invoke: python3 -m {MODULE_PATH} --step 1 --state-dir {state_dir} --reconciliation-check",
+            ])
+
+        actions.extend([
             "",
             "WORKFLOW:",
-            "  This step is ANALYSIS ONLY. Do NOT delegate yet.",
-            "  Record wave groupings for step 3 (Implementation).",
-        ],
-    },
-    2: {
-        "title": "Reconciliation",
-        "is_dispatch": True,
-        "dispatch_agent": "quality-reviewer",
-        "mode_script": "quality_reviewer/exec-reconcile.py",
-        "invoke_suffix": " --milestone N",
-        "pre_dispatch": [
-            "Validate existing code against plan requirements BEFORE executing.",
+            "  This step is ANALYSIS ONLY. Do NOT delegate implementation yet.",
+            "  Record wave groupings for step 2 (Implementation).",
+        ])
+
+        return {
+            "title": title,
+            "actions": actions,
+            "next": f"python3 -m {MODULE_PATH} --step 2 --state-dir {state_dir}",
+        }
+
+    return handler
+
+
+def wave_next_step(title):
+    """Step 10: advance to next wave or complete execution."""
+    def handler(ctx):
+        state_dir = ctx["state_dir"]
+
+        actions = [
+            "CHECK wave progress against the wave list from step 1:",
             "",
-            "For EACH milestone, launch quality-reviewer agent:",
-        ],
-        "post_dispatch": [
-            "The sub-agent will invoke the script and follow its guidance.",
+            "IF unimplemented waves remain:",
+            f"  invoke: python3 -m {MODULE_PATH} --step 2 --state-dir {state_dir}",
             "",
-            "Expected output: SATISFIED | NOT_SATISFIED | PARTIALLY_SATISFIED",
-        ],
-        "routing": {
-            "SATISFIED": "Mark milestone complete, skip execution",
-            "NOT_SATISFIED": "Execute milestone normally",
-            "PARTIALLY_SATISFIED": "Execute only missing parts",
-        },
-        "extra_instructions": [
+            "IF ALL waves complete: EXECUTION COMPLETE.",
             "",
-            "Parallel execution: May run reconciliation for multiple milestones",
-            "in parallel (multiple Task calls in single response) when milestones",
-            "are independent.",
-        ],
-    },
-    3: {
-        "title": "Implementation",
-    },
-    4: {
-        "title": "Code QR",
-        "is_qr": True,
-        "qr_name": "CODE QR",
-        "is_dispatch": True,
-        "dispatch_agent": "quality-reviewer",
-        "mode_script": "quality_reviewer/impl-code-qr.py",
-        "pre_dispatch": [
-            "<qa_integration>",
-            "Before QR code review, run post-implementation QA.",
-            "",
-            "1. DISPATCH QA decomposition:",
-            "   python3 -m skills.planner.qa.decompose --step 1",
-            "   Context: PLAN_FILE, MODIFIED_FILES, STATE_DIR (if available)",
-            "   Phase: post-implementation",
-            "",
-            "2. Once decomposition complete, read qa.yaml from STATE_DIR.",
-            "",
-            "3. For each item where scope != '*': dispatch parallel verifier.",
-            "   For each item where scope == '*': dispatch sequential verifier.",
-            "",
-            "4. Aggregate results into qa.yaml (update status/finding fields).",
-            "",
-            "5. Then proceed with Code QR review below.",
-            "</qa_integration>",
-            "",
-        ],
-        "post_dispatch": [
-            "The sub-agent will invoke the script and follow its guidance.",
-            "",
-            "Expected output: PASS or ISSUES (XML grouped by milestone).",
-        ],
-        "post_qr_routing": {"self_fix": False, "fix_target": "developer"},
-    },
-    # Step 5 is the Code QR gate - handled separately
-    6: {
-        "title": "Documentation",
-    },
-    7: {
-        "title": "Doc QR",
-        "is_qr": True,
-        "qr_name": "DOC QR",
-        "is_dispatch": True,
-        "dispatch_agent": "quality-reviewer",
-        "mode_script": "quality_reviewer/impl-docs-qr.py",
-        "post_dispatch": [
-            "The sub-agent will invoke the script and follow its guidance.",
-            "",
-            "Expected output: PASS or ISSUES.",
-        ],
-        "post_qr_routing": {"self_fix": False, "fix_target": "technical-writer"},
-    },
-    # Step 8 is the Doc QR gate - handled separately
-    9: {
-        "title": "Retrospective",
-        "actions": [
             "PRESENT retrospective to user (do not write to file):",
             "",
             "EXECUTION RETROSPECTIVE",
@@ -182,427 +218,196 @@ STEPS = {
             "Deviations from Plan: [if any]",
             "Quality Review Summary: [counts by category]",
             "Feedback for Future Plans: [actionable suggestions]",
+        ]
+
+        return {
+            "title": title,
+            "actions": actions,
+            "next": "",
+        }
+
+    return handler
+
+
+# =============================================================================
+# Step Definitions (1-10)
+# =============================================================================
+
+STEPS = {
+    1: exec_init_step(
+        title="exec-init",
+    ),
+    # Impl-code phase (steps 2-5)
+    2: execute_dispatch_step(
+        title="impl-code-work",
+        agent="developer",
+        script="developer/exec_implement.py",
+        phase="impl-code",
+        post_dispatch=[
+            "The sub-agent executes milestones wave-aware:",
+            "  - Milestones within same wave: PARALLEL dispatch",
+            "  - Waves: SEQUENTIAL",
+            "Use waves identified in step 1.",
         ],
-    },
+    ),
+    3: qr_decompose_step(
+        title="impl-code-qr-decompose",
+        phase="impl-code",
+        script="quality_reviewer/impl_code_qr_decompose.py",
+        model="opus",
+    ),
+    4: qr_verify_step(
+        title="impl-code-qr-verify",
+        phase="impl-code",
+    ),
+    5: qr_route_step(
+        title="impl-code-qr-route",
+        phase="impl-code",
+        work_step=2,
+        pass_step=6,
+        pass_message="Code quality verified. Proceed to step 6 (impl-docs-work).",
+        fix_target=AgentRole.DEVELOPER,
+    ),
+    # Impl-docs phase (steps 6-9)
+    6: execute_dispatch_step(
+        title="impl-docs-work",
+        agent="technical-writer",
+        script="technical_writer/exec_docs.py",
+        phase="impl-docs",
+    ),
+    7: qr_decompose_step(
+        title="impl-docs-qr-decompose",
+        phase="impl-docs",
+        script="quality_reviewer/impl_docs_qr_decompose.py",
+        model="opus",
+    ),
+    8: qr_verify_step(
+        title="impl-docs-qr-verify",
+        phase="impl-docs",
+    ),
+    9: qr_route_step(
+        title="impl-docs-qr-route",
+        phase="impl-docs",
+        work_step=6,
+        pass_step=10,
+        pass_message="Documentation verified. Proceed to step 10 (wave-next).",
+        fix_target=AgentRole.TECHNICAL_WRITER,
+    ),
+    10: wave_next_step(
+        title="wave-next",
+    ),
 }
 
-
-# Gate configuration for step 5 (Code QR Gate)
-CODE_QR_GATE = GateConfig(
-    qr_name="Code QR",
-    work_step=3,
-    pass_step=6,
-    pass_message="Code quality verified. Proceed to documentation.",
-    fix_target=AgentRole.DEVELOPER,
-)
-
-# Gate configuration for step 8 (Doc QR Gate)
-DOC_QR_GATE = GateConfig(
-    qr_name="Doc QR",
-    work_step=6,
-    pass_step=9,
-    pass_message="Documentation verified. Proceed to retrospective.",
-    fix_target=AgentRole.TECHNICAL_WRITER,
-)
+validate_step_count(STEPS, EXECUTOR_TOTAL_STEPS, "executor")
 
 
-def format_gate(step: int, gate: GateConfig, qr: QRState, total_steps: int) -> str:
-    """Format gate step output."""
-    parts = []
+def get_step_guidance(step: int, qr_status, state_dir, reconciliation_check=False) -> dict | str:
+    """Returns guidance for a step.
 
-    # Gate result banner
-    parts.append(format_gate_result(qr.passed))
-    parts.append("")
+    Iteration and fix mode derived from qr-{phase}.json file state.
+    Phase derived from handler attribute set by step factory.
+    """
+    from skills.planner.shared.qr.utils import get_qr_iteration, has_qr_failures
 
-    if qr.passed:
-        parts.append(gate.pass_message)
-        parts.append("")
-        parts.append(format_forbidden(
-            "Asking the user whether to proceed - the workflow is deterministic",
-            "Offering alternatives to the next step - all steps are mandatory",
-            "Interpreting 'proceed' as optional - EXECUTE immediately",
-        ))
-    else:
-        parts.append(PEDANTIC_ENFORCEMENT)
-        parts.append("")
+    handler = STEPS.get(step)
+    if not handler:
+        return {"error": f"Invalid step {step}"}
 
-        fix_target = gate.fix_target.value if gate.fix_target else "developer"
-        parts.append("NEXT ACTION:")
-        parts.append("  Invoke the next step command.")
-        parts.append(f"  The next step will dispatch {fix_target} with fix guidance.")
-        parts.append("")
+    # Phase stored as handler attribute by step factory.
+    # None for non-QR steps (1, 10).
+    phase = getattr(handler, 'phase', None)
+    iteration = get_qr_iteration(state_dir, phase) if state_dir and phase else 1
 
-        parts.append(format_forbidden(
-            "Fixing issues directly from this gate step",
-            "Spawning agents directly from this gate step",
-            "Using Edit/Write tools yourself",
-            "Proceeding without invoking the next step",
-            "Interpreting 'minor issues' as skippable",
-            "Claiming 'diminishing returns' or 'comprehensive enough'",
-            "Proceeding to next phase without QR PASS",
-        ))
+    status = QRStatus(qr_status) if qr_status else None
+    is_fix_mode = state_dir and phase and has_qr_failures(state_dir, phase)
+    state = LoopState.RETRY if is_fix_mode else LoopState.INITIAL
+    qr = QRState(iteration=iteration, state=state, status=status)
 
-    body = "\n".join(parts)
+    ctx = {
+        "step": step,
+        "qr": qr,
+        "state_dir": state_dir,
+        "reconciliation_check": reconciliation_check,
+    }
 
-    # Determine next command
-    if qr.passed and gate.pass_step is not None:
-        next_cmd = f"python3 -m {MODULE_PATH} --step {gate.pass_step}"
-    else:
-        next_iteration = qr.iteration + 1
-        next_cmd = f"python3 -m {MODULE_PATH} --step {gate.work_step} --qr-fail --qr-iteration {next_iteration}"
-
-    return format_step(body, next_cmd, title=f"{gate.qr_name} Gate")
+    return handler(ctx)
 
 
-def format_step_3_implementation(qr: QRState, total_steps: int, milestone_count: int) -> str:
-    """Format step 3 implementation output."""
-    if qr.state == LoopState.RETRY:
-        title = "Implementation - Fix Mode"
-    else:
-        title = "Implementation"
+def format_output(step: int, qr_status, state_dir, reconciliation_check=False) -> str | GateResult:
+    """Format output for display."""
+    guidance = get_step_guidance(step, qr_status, state_dir=state_dir,
+                                 reconciliation_check=reconciliation_check)
 
-    actions = []
-    if qr.state == LoopState.RETRY:
-        actions.append(format_state_banner("IMPLEMENTATION FIX", qr.iteration, "fix"))
-        actions.append("")
-        actions.append("FIX MODE: Code QR found issues.")
-        actions.append("")
-        actions.append(ORCHESTRATOR_CONSTRAINT)
-        actions.append("")
-
-        mode_script = get_mode_script_path("dev/fix-code.py")
-        invoke_cmd = f"python3 -m {mode_script} --step 1 --qr-fail --qr-iteration {qr.iteration}"
-
-        actions.append(subagent_dispatch(
-            agent_type="developer",
-            command=invoke_cmd,
-        ))
-        actions.append("")
-        actions.append("Developer reads QR report and fixes issues in <milestone> blocks.")
-        actions.append("After developer completes, re-run Code QR for fresh verification.")
-    else:
-        actions.extend([
-            "Execute ALL milestones using wave-aware parallel dispatch.",
-            "",
-            "WAVE-AWARE EXECUTION:",
-            "  - Milestones within same wave: dispatch in PARALLEL",
-            "    (Multiple Task calls in single response)",
-            "  - Waves execute SEQUENTIALLY",
-            "    (Wait for wave N to complete before starting wave N+1)",
-            "",
-            "Use waves identified in step 1.",
-            "",
-            ORCHESTRATOR_CONSTRAINT,
-            "",
-            "FOR EACH WAVE:",
-            "  1. Dispatch developer agents for ALL milestones in wave:",
-            "     Task(developer): Milestone N",
-            "     Task(developer): Milestone M  (if parallel)",
-            "",
-            "  2. Each prompt must include:",
-            "     - Plan file: $PLAN_FILE",
-            "     - Milestone: [number and name]",
-            "     - Files: [exact paths to create/modify]",
-            "     - Acceptance criteria: [from plan]",
-            "",
-            "  3. Wait for ALL agents in wave to complete",
-            "",
-            "  4. Run tests: pytest / tsc / go test -race",
-            "     Pass criteria: 100% tests pass, zero warnings",
-            "",
-            "  5. Proceed to next wave (repeat 1-4)",
-            "",
-            "After ALL waves complete, proceed to Code QR.",
-            "",
-            "ERROR HANDLING (you NEVER fix code yourself):",
-            "  Clear problem + solution: Task(developer) immediately",
-            "  Difficult/unclear problem: Task(debugger) to diagnose first",
-            "  Uncertain how to proceed: AskUserQuestion with options",
-        ])
-
-    body = "\n".join(actions)
-    next_cmd = f"python3 -m {MODULE_PATH} --step 4"
-
-    return format_step(body, next_cmd, title=title)
-
-
-def format_step_6_documentation(qr: QRState, total_steps: int) -> str:
-    """Format step 6 documentation output."""
-    mode_script = get_mode_script_path("technical_writer/exec-docs.py")
-
-    if qr.state == LoopState.RETRY:
-        title = "Documentation - Fix Mode"
-    else:
-        title = "Documentation"
-
-    actions = []
-
-    if qr.state == LoopState.RETRY:
-        actions.append(format_state_banner("DOCUMENTATION FIX", qr.iteration, "fix"))
-        actions.append("")
-        actions.append("FIX MODE: Doc QR found issues.")
-        actions.append("")
-        actions.append(ORCHESTRATOR_CONSTRAINT)
-        actions.append("")
-
-        invoke_cmd = f"python3 -m {mode_script} --step 1 --qr-fail --qr-iteration {qr.iteration}"
-        actions.append(subagent_dispatch(
-            agent_type="technical-writer",
-            command=invoke_cmd,
-        ))
-    else:
-        actions.append(ORCHESTRATOR_CONSTRAINT)
-        actions.append("")
-
-        invoke_cmd = f"python3 -m {mode_script} --step 1"
-        actions.append(subagent_dispatch(
-            agent_type="technical-writer",
-            command=invoke_cmd,
-        ))
-
-    body = "\n".join(actions)
-    next_cmd = f"python3 -m {MODULE_PATH} --step 7"
-
-    return format_step(body, next_cmd, title=title)
-
-
-def format_step_1_planning(qr: QRState, total_steps: int, reconciliation_check: bool, **kw) -> str:
-    """Format step 1 planning output."""
-    info = STEPS[1]
-
-    actions = list(info["actions"])
-    actions.extend([
-        "",
-        "=" * 70,
-        "MANDATORY NEXT ACTION",
-        "=" * 70,
-    ])
-    if reconciliation_check:
-        next_cmd = f"python3 -m {MODULE_PATH} --step 2 --reconciliation-check"
-    else:
-        actions.extend([
-            "Proceed to Implementation step.",
-            "Use the wave groupings from your analysis.",
-            "=" * 70,
-        ])
-        next_cmd = f"python3 -m {MODULE_PATH} --step 3"
+    if isinstance(guidance, GateResult):
+        return guidance
+    if isinstance(guidance, str):
+        return guidance
+    if "error" in guidance:
+        return f"Error: {guidance['error']}"
 
     body_parts = []
-    body_parts.append(THINKING_EFFICIENCY)
-    body_parts.append("")
-    body_parts.extend(actions)
+    if step == 1:
+        body_parts.append(THINKING_EFFICIENCY)
+        body_parts.append("")
+
+    for action in guidance["actions"]:
+        body_parts.append(str(action))
 
     body = "\n".join(body_parts)
-    return format_step(body, next_cmd, title=info["title"])
+    title = guidance["title"]
 
+    if_pass = guidance.get("if_pass")
+    if_fail = guidance.get("if_fail")
+    next_cmd = guidance.get("next", "")
 
-def format_step_4_code_qr(qr: QRState, total_steps: int, **kw) -> str:
-    """Format step 4 code QR output with branching."""
-    info = STEPS[4]
-
-    actions = []
-    actions.append(format_state_banner(info["qr_name"], qr.iteration, "fresh_review"))
-    actions.append("")
-
-    pre_dispatch = info.get("pre_dispatch", [])
-    actions.extend(pre_dispatch)
-
-    actions.append(ORCHESTRATOR_CONSTRAINT)
-    actions.append("")
-
-    mode_script = get_mode_script_path(info["mode_script"])
-    dispatch_agent = info.get("dispatch_agent", "agent")
-    invoke_suffix = info.get("invoke_suffix", "")
-    invoke_cmd = f"python3 -m {mode_script} --step 1{invoke_suffix}"
-
-    actions.append(subagent_dispatch(
-        agent_type=dispatch_agent,
-        command=invoke_cmd,
-    ))
-    actions.append("")
-
-    post_dispatch = info.get("post_dispatch", [])
-    actions.extend(post_dispatch)
-
-    body = "\n".join(actions)
-    if_pass = f"python3 -m {MODULE_PATH} --step 5 --qr-status pass"
-    if_fail = f"python3 -m {MODULE_PATH} --step 5 --qr-status fail"
-
-    return format_step(body, title=info["title"], if_pass=if_pass, if_fail=if_fail)
-
-
-def format_step_7_doc_qr(qr: QRState, total_steps: int, **kw) -> str:
-    """Format step 7 doc QR output with branching."""
-    info = STEPS[7]
-
-    actions = []
-    actions.append(format_state_banner(info["qr_name"], qr.iteration, "fresh_review"))
-    actions.append("")
-
-    pre_dispatch = info.get("pre_dispatch", [])
-    actions.extend(pre_dispatch)
-
-    actions.append(ORCHESTRATOR_CONSTRAINT)
-    actions.append("")
-
-    mode_script = get_mode_script_path(info["mode_script"])
-    dispatch_agent = info.get("dispatch_agent", "agent")
-    invoke_suffix = info.get("invoke_suffix", "")
-    invoke_cmd = f"python3 -m {mode_script} --step 1{invoke_suffix}"
-
-    actions.append(subagent_dispatch(
-        agent_type=dispatch_agent,
-        command=invoke_cmd,
-    ))
-    actions.append("")
-
-    post_dispatch = info.get("post_dispatch", [])
-    actions.extend(post_dispatch)
-
-    extra_instructions = info.get("extra_instructions", [])
-    actions.extend(extra_instructions)
-
-    body = "\n".join(actions)
-    if_pass = f"python3 -m {MODULE_PATH} --step 8 --qr-status pass"
-    if_fail = f"python3 -m {MODULE_PATH} --step 8 --qr-status fail"
-
-    return format_step(body, title=info["title"], if_pass=if_pass, if_fail=if_fail)
-
-
-STEP_HANDLERS = {
-    1: format_step_1_planning,
-    3: lambda qr, total_steps, milestone_count, **kw: format_step_3_implementation(qr, total_steps, milestone_count),
-    4: format_step_4_code_qr,
-    5: lambda qr, total_steps, qr_status, **kw: format_gate(5, CODE_QR_GATE, qr, total_steps) if qr_status else "Error: --qr-status required for step 5",
-    6: lambda qr, total_steps, **kw: format_step_6_documentation(qr, total_steps),
-    7: format_step_7_doc_qr,
-    8: lambda qr, total_steps, qr_status, **kw: format_gate(8, DOC_QR_GATE, qr, total_steps) if qr_status else "Error: --qr-status required for step 8",
-}
-
-
-def format_output(step: int,
-                  qr_iteration: int, qr_fail: bool, qr_status: str,
-                  reconciliation_check: bool, milestone_count: int) -> str:
-    """Format output for display."""
-    from skills.planner.shared.constants import EXECUTOR_TOTAL_STEPS
-
-    total_steps = EXECUTOR_TOTAL_STEPS
-
-    # Construct QRState from legacy parameters
-    status = QRStatus(qr_status) if qr_status else None
-    state = LoopState.RETRY if qr_fail else LoopState.INITIAL
-    qr = QRState(iteration=qr_iteration, state=state, status=status)
-
-    # Dispatch to step-specific handlers
-    handler = STEP_HANDLERS.get(step)
-    if handler:
-        return handler(qr=qr, total_steps=total_steps, qr_status=qr_status,
-                      milestone_count=milestone_count, reconciliation_check=reconciliation_check)
-
-    # Generic step handling
-    info = STEPS.get(step, STEPS[9])
-
-    # Handle QR step in fix mode (developer/TW fixes, not QR re-run)
-    if info.get("is_qr") and qr.state == LoopState.RETRY:
-        post_qr_config = info.get("post_qr_routing", {})
-        fix_target = post_qr_config.get("fix_target", "developer")
-        qr_name = info.get("qr_name", "QR")
-
-        fix_actions = []
-        fix_actions.append(format_state_banner(qr_name, qr.iteration, "fix"))
-        fix_actions.append("")
-        fix_actions.append(f"FIX MODE: {qr_name} found issues.")
-        fix_actions.append("")
-        fix_actions.append(ORCHESTRATOR_CONSTRAINT)
-        fix_actions.append("")
-
-        mode_script = get_mode_script_path(f"{fix_target}/fix.py")
-        invoke_cmd = f"python3 -m {mode_script} --step 1 --qr-fail --qr-iteration {qr.iteration}"
-
-        fix_actions.append(subagent_dispatch(
-            agent_type=fix_target,
-            command=invoke_cmd,
-        ))
-
-        body = "\n".join(fix_actions)
-        next_cmd = f"python3 -m {MODULE_PATH} --step {step}"
-
-        return format_step(body, next_cmd, title=f"{info['title']} - Fix Mode")
-
-    is_complete = step >= total_steps
-
-    # Build actions
-    actions = []
-
-    # Add QR banner for QR steps
-    if info.get("is_qr"):
-        qr_name = info.get("qr_name", "QR")
-        actions.append(format_state_banner(qr_name, qr.iteration, "fresh_review"))
-        actions.append("")
-
-    # Handle dispatch steps
-    if info.get("is_dispatch"):
-        pre_dispatch = info.get("pre_dispatch", [])
-        actions.extend(pre_dispatch)
-
-        actions.append(ORCHESTRATOR_CONSTRAINT)
-        actions.append("")
-
-        mode_script = get_mode_script_path(info["mode_script"])
-        dispatch_agent = info.get("dispatch_agent", "agent")
-        invoke_suffix = info.get("invoke_suffix", "")
-        invoke_cmd = f"python3 -m {mode_script} --step 1{invoke_suffix}"
-
-        actions.append(subagent_dispatch(
-            agent_type=dispatch_agent,
-            command=invoke_cmd,
-        ))
-        actions.append("")
-
-        post_dispatch = info.get("post_dispatch", [])
-        actions.extend(post_dispatch)
-    elif "actions" in info:
-        actions.extend(info["actions"])
-
-    # Build next command
-    if is_complete:
-        actions.append("")
-        actions.append("EXECUTION COMPLETE - Present retrospective to user.")
-        next_cmd = ""
-    else:
-        next_cmd = f"python3 -m {MODULE_PATH} --step {step + 1}"
-
-    body = "\n".join(actions)
-    return format_step(body, next_cmd, title=info["title"])
+    if if_pass and if_fail:
+        return format_step(body, title=title, if_pass=if_pass, if_fail=if_fail)
+    return format_step(body, next_cmd, title=title)
 
 
 def main():
+    """CLI entry point for executor orchestration."""
     parser = argparse.ArgumentParser(
-        description="Plan Executor - Execute approved plans",
-        epilog="Steps: plan -> reconcile -> implement -> code QR -> gate -> docs -> doc QR -> gate -> retrospective",
+        description="Plan Executor (10-step orchestration workflow)",
+        epilog="Step 1: exec-init | Steps 2-9: work + QR phases | Step 10: wave-next",
     )
 
     parser.add_argument("--step", type=int, required=True)
+    parser.add_argument("--state-dir", type=str, default=None,
+                        help="State directory path (holds plan.json and qr-{phase}.json)")
+    parser.add_argument("--reconciliation-check", action="store_true",
+                        help="Include reconciliation dispatch in step 1 output")
     add_qr_args(parser)
-    parser.add_argument("--qr-iteration", type=int, default=0)
-    parser.add_argument("--qr-fail", action="store_true")
-    parser.add_argument("--reconciliation-check", action="store_true")
-    parser.add_argument("--milestone-count", type=int, default=0)
 
     args = parser.parse_args()
 
-    if args.step < 1 or args.step > 9:
-        sys.exit("Error: step must be 1-9")
+    if args.step < 1 or args.step > EXECUTOR_TOTAL_STEPS:
+        sys.exit(f"Error: step must be 1-{EXECUTOR_TOTAL_STEPS}")
 
-    if args.step == 5 and not args.qr_status:
-        sys.exit("Error: --qr-status required for step 5")
+    # Validate state before running step (skip for step 1 which may create state)
+    if args.step > 1 and args.state_dir:
+        from skills.planner.shared.schema import validate_state, SchemaValidationError
+        try:
+            validate_state(args.state_dir)
+        except SchemaValidationError as e:
+            sys.exit(f"Schema validation failed: {e}")
 
-    if args.step == 8 and not args.qr_status:
-        sys.exit("Error: --qr-status required for step 8")
+    # Route steps require --qr-status; provide helpful output if missing
+    if args.step in EXECUTOR_GATE_STEPS and not args.qr_status:
+        gate_names = {5: "impl-code-qr-route", 9: "impl-docs-qr-route"}
+        print(f"EXECUTOR - Step {args.step}/{EXECUTOR_TOTAL_STEPS}: {gate_names[args.step]}")
+        print()
+        print("This is a route step. Re-invoke with --qr-status pass or --qr-status fail")
+        print("based on the aggregated QR output from the previous step.")
+        sys.exit(0)
 
-    print(format_output(args.step,
-                        args.qr_iteration, args.qr_fail, args.qr_status,
-                        args.reconciliation_check, args.milestone_count))
+    result = format_output(args.step, args.qr_status, state_dir=args.state_dir,
+                           reconciliation_check=args.reconciliation_check)
+
+    if isinstance(result, GateResult):
+        print(result.output)
+    else:
+        print(result)
 
 
 if __name__ == "__main__":

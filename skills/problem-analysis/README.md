@@ -146,6 +146,6 @@ The skill will:
 
 ## Implementation Notes
 
-The workflow uses `skills.lib.workflow.formatters.text` for output formatting.
-Phase 3 uses `build_invoke_command()` with dynamic `--iteration` parameter
-computed by the script.
+The workflow uses `skills.lib.workflow.prompts` (`format_step`) for output
+formatting. The investigation step passes a dynamic `--iteration` parameter
+computed by the script, capped at MAX_ITERATIONS=5.
