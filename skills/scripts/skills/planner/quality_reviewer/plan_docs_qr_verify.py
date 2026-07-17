@@ -71,10 +71,15 @@ class PlanDocsVerify(VerifyBase):
                 f"  Extract decision:",
                 f"    cat {state_dir}/plan.json | jq '.planning_context.decisions[] | select(.id == \"{dl_id}\")'",
                 "",
-                f"  Verify this decision is referenced in at least one doc_diff:",
-                f"    cat {state_dir}/plan.json | jq '.milestones[].code_changes[].doc_diff' | grep -i '{dl_id}'",
+                f"  Verify this decision's rationale is EXPRESSED in at least one",
+                f"  doc_diff as self-contained timeless prose: read the decision's",
+                f"  reasoning above, then read doc_diff additions for content that",
+                f"  carries the same WHY (semantic match, not id grep).",
                 "",
-                "  Decision references should appear as: (ref: DL-XXX) or (DL-XXX)",
+                f"  NEGATIVE CHECK -- the DL id itself must NOT appear in doc_diff",
+                f"  content (plan-artifact reference; the plan does not ship with",
+                f"  the code, so the ref dangles for readers):",
+                f"    cat {state_dir}/plan.json | jq -r '.milestones[].code_changes[].doc_diff' | grep -in '{dl_id}'   # expect no output",
                 "",
             ])
         elif scope.startswith("change:"):
@@ -124,6 +129,12 @@ class PlanDocsVerify(VerifyBase):
                 "  - LOCATION_DIRECTIVE: 'After X', 'Before Y', 'Insert'",
                 "  - PLANNING_ARTIFACT: 'TODO', 'Will', 'Planned'",
                 "  - INTENT_LEAKAGE: 'intentionally', 'deliberately', 'chose'",
+                "  - PLAN_ARTIFACT_REFERENCE: '(ref: DL-XXX)', DL-/CI-/CC-/M- ids,",
+                "    plan file names, dates -- pointers to planning documents that",
+                "    do not ship with the code",
+                "",
+                "  Mechanical scan for plan-artifact refs:",
+                f"    cat {state_dir}/plan.json | jq -r '.milestones[].code_changes[].doc_diff' | grep -nE '\\(ref:|DL-[0-9]|CC-M-|CI-M-'   # expect no output",
                 "",
             ])
         elif "baseline" in check.lower():
@@ -156,14 +167,19 @@ class PlanDocsVerify(VerifyBase):
         elif "decision" in check.lower() and ("coverage" in check.lower() or "uncovered" in check.lower()):
             guidance.extend([
                 "DECISION COVERAGE CHECK:",
-                "  Each decision in planning_context.decisions[] should appear",
-                "  in at least one doc_diff as (ref: DL-XXX) or (DL-XXX).",
+                "  Each decision's rationale must be EXPRESSED in at least one",
+                "  doc_diff as self-contained timeless prose. The DL-XXX id itself",
+                "  must NOT appear in doc_diff content -- the decision log is a",
+                "  planning artifact that does not ship with the code.",
                 "",
-                "  List all decisions:",
-                f"    cat {state_dir}/plan.json | jq '.planning_context.decisions[].id'",
+                "  List all decisions with reasoning:",
+                f"    cat {state_dir}/plan.json | jq '.planning_context.decisions[] | {{id, decision, reasoning}}'",
                 "",
-                "  Search doc_diffs for references:",
-                f"    cat {state_dir}/plan.json | jq '.milestones[].code_changes[].doc_diff' | grep -o 'DL-[0-9]\\+' | sort -u",
+                "  For each decision, read doc_diff additions and confirm the",
+                "  rationale content appears (semantic match, not id grep).",
+                "",
+                "  NEGATIVE CHECK -- no DL ids leaked into doc_diffs:",
+                f"    cat {state_dir}/plan.json | jq -r '.milestones[].code_changes[].doc_diff' | grep -o 'DL-[0-9]\\+' | sort -u   # expect empty",
                 "",
             ])
         elif "why" in check.lower() and "what" in check.lower():
@@ -188,12 +204,13 @@ class PlanDocsVerify(VerifyBase):
             guidance.extend([
                 "DECISION COVERAGE CHECK:",
                 "  Verify planning knowledge appears in doc_diff fields:",
-                "  - Each decision in planning_context.decisions[] should have a",
-                "    corresponding reference in at least one doc_diff",
-                "  - Reference format: (ref: DL-XXX) or (DL-XXX)",
+                "  - Each decision's rationale is expressed in at least one",
+                "    doc_diff as self-contained timeless prose",
+                "  - The DL-XXX id itself must NOT appear in doc_diff content",
+                "    (plan-artifact reference; the plan does not ship with the code)",
                 "",
-                "  Search doc_diffs for decision refs:",
-                f"    cat {state_dir}/plan.json | jq '.milestones[].code_changes[].doc_diff' | grep -o 'DL-[0-9]\\+' | sort -u",
+                "  NEGATIVE CHECK -- no DL ids leaked into doc_diffs:",
+                f"    cat {state_dir}/plan.json | jq -r '.milestones[].code_changes[].doc_diff' | grep -o 'DL-[0-9]\\+' | sort -u   # expect empty",
                 "",
             ])
 

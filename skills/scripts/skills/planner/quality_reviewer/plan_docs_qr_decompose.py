@@ -9,7 +9,7 @@ NOT code correctness (plan-code's job).
 Severity categories (per conventions/severity.md):
   MUST: KNOWLEDGE categories only (TW can fix documentation issues)
     - DECISION_LOG_MISSING, IK_TRANSFER_FAILURE
-    - TEMPORAL_CONTAMINATION, BASELINE_REFERENCE
+    - TEMPORAL_CONTAMINATION, BASELINE_REFERENCE, PLAN_ARTIFACT_REFERENCE
   SHOULD: Documentation structure gaps
   COULD: Minor formatting inconsistencies
 
@@ -37,7 +37,9 @@ WHAT YOU REVIEW:
   - milestones[].code_changes[].doc_diff -- documentation overlay diffs
   - Temporal contamination in doc_diff content
   - WHY-not-WHAT quality in added comments
-  - Decision coverage (DL-XXX references)
+  - Decision coverage (rationale expressed in doc_diff text as
+    self-contained timeless prose; DL-XXX ids themselves must NOT
+    appear in doc_diff content -- plan-artifact references)
 
 WHAT YOU DO NOT REVIEW:
   - milestones[].code_changes[].diff -- code logic (plan-code's job)
@@ -57,7 +59,9 @@ Brainstorm concerns specific to DOC_DIFF QUALITY:
   - Code changes missing doc_diff (diff present but doc_diff empty)
   - Temporal contamination in doc_diff content
   - Missing WHY-not-WHAT (comments describe code, not explain reasoning)
-  - Incomplete decision coverage (DL-XXX not referenced in any doc_diff)
+  - Incomplete decision coverage (a decision's rationale expressed in no doc_diff)
+  - Plan-artifact references in doc_diff content ((ref: DL-XXX), DL-/CI-/CC-/M- ids,
+    plan file names, dates -- pointers to documents that do not ship with the code)
   - Invalid diff format (doc_diff not valid unified diff)
 
 DO NOT brainstorm code correctness concerns (out of scope for this phase).
@@ -72,14 +76,17 @@ ARTIFACTS TO VERIFY:
     * Diff format validity (unified diff syntax)
     * Temporal contamination (change-relative language)
     * WHY-not-WHAT (comments explain reasoning)
-    * Decision references (DL-XXX present)
+    * Plan-artifact references ((ref: DL-XXX), DL-/CI-/CC-/M- ids,
+      plan file names, dates -- must be ABSENT from doc_diff content)
 
   - Each code_change with diff but NO doc_diff:
     * Flag as MUST: documentation required
 
 COVERAGE CHECK:
-  - List all DL-XXX IDs from planning_context.decisions
-  - Verify each appears in at least one doc_diff
+  - List all decisions from planning_context.decisions with reasoning
+  - Verify each decision's rationale is expressed in at least one
+    doc_diff as self-contained timeless prose (semantic match --
+    the DL-XXX id itself must NOT appear in doc_diff content)
   - Missing coverage: MUST severity
 
 DO NOT enumerate:
@@ -92,9 +99,11 @@ SEVERITY ASSIGNMENT for plan-docs (doc_diff focused):
 
   MUST (blocks all iterations):
     - CODE_WITHOUT_DOCS: code_change has diff but no doc_diff
-    - DECISION_UNCOVERED: DL-XXX not in any doc_diff
+    - DECISION_UNCOVERED: decision rationale expressed in no doc_diff
     - INVALID_DIFF_FORMAT: doc_diff not valid unified diff
     - TEMPORAL_CONTAMINATION: change-relative language in doc_diff
+    - PLAN_ARTIFACT_REFERENCE: (ref: DL-XXX), DL-/CI-/CC-/M- ids, plan
+      file names, or dates in doc_diff content (the plan does not ship)
 
   SHOULD (iterations 1-4):
     - WHY_NOT_WHAT: doc_diff comment describes code, not reasoning
