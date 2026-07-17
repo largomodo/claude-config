@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Understands architecture, project conventions, and quality designs
-model: opus
+model: fable
 color: purple
 ---
 

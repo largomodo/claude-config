@@ -177,7 +177,7 @@ def subagent_dispatch(
         agent_type: Task tool subagent_type (e.g., "general-purpose", "Explore")
         command: Shell command sub-agent must run after spawning
         prompt: Optional task description for sub-agent
-        model: Optional model override ("haiku", "sonnet", "opus")
+        model: Optional model override ("haiku", "sonnet", "opus", "fable")
 
     Returns:
         Complete dispatch prompt as plain text

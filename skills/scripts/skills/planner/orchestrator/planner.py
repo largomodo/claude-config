@@ -239,7 +239,7 @@ STEPS = {
         title="plan-design-qr-decompose",
         phase="plan-design",
         script="quality_reviewer/plan_design_qr_decompose.py",
-        model="opus",
+        model="fable",
     ),
     5: qr_verify_step(
         title="plan-design-qr-verify",
@@ -266,7 +266,7 @@ STEPS = {
         title="plan-code-qr-decompose",
         phase="plan-code",
         script="quality_reviewer/plan_code_qr_decompose.py",
-        model="opus",
+        model="fable",
     ),
     9: qr_verify_step(
         title="plan-code-qr-verify",
@@ -294,7 +294,7 @@ STEPS = {
         title="plan-docs-qr-decompose",
         phase="plan-docs",
         script="quality_reviewer/plan_docs_qr_decompose.py",
-        model="opus",
+        model="fable",
     ),
     13: qr_verify_step(
         title="plan-docs-qr-verify",

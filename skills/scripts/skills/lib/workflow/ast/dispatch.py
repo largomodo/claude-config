@@ -68,7 +68,7 @@ class SubagentDispatchNode:
     agent_type: str              # "general-purpose", "Explore", etc.
     command: str                 # invoke command for step 1
     prompt: str = ""             # optional context; empty = no <prompt> element
-    model: str | None = None     # "haiku", "sonnet", "opus"
+    model: str | None = None     # "haiku", "sonnet", "opus", "fable"
 
 
 @dataclass(frozen=True)

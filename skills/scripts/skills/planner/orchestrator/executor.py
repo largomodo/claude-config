@@ -256,7 +256,7 @@ STEPS = {
         title="impl-code-qr-decompose",
         phase="impl-code",
         script="quality_reviewer/impl_code_qr_decompose.py",
-        model="opus",
+        model="fable",
     ),
     4: qr_verify_step(
         title="impl-code-qr-verify",
@@ -284,7 +284,7 @@ STEPS = {
         title="impl-docs-qr-decompose",
         phase="impl-docs",
         script="quality_reviewer/impl_docs_qr_decompose.py",
-        model="opus",
+        model="fable",
     ),
     8: qr_verify_step(
         title="impl-docs-qr-verify",

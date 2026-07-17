@@ -267,7 +267,7 @@ def build_mode1_dispatch() -> str:
         template=MODE1_TEMPLATE,
         targets=[{"ARXIV_ID": "EXAMPLE"}],
         command=f'python3 -m {SUBAGENT_MODULE_PATH} --step 1 --arxiv-id $ARXIV_ID',
-        model="opus",
+        model="fable",
         instruction="Launch one sub-agent per arXiv ID.\nUse a SINGLE message with multiple Task tool calls.\n\nThese markdown files become the scientific basis for downstream work.\nCost of error amplifies: subpar markdown -> subpar knowledge.",
     )
 
@@ -279,7 +279,7 @@ def build_mode2_dispatch() -> str:
         template=MODE2_TEMPLATE,
         targets=[{"ARXIV_ID": "EXAMPLE", "DEST_FILE": "EXAMPLE"}],
         command=f'python3 -m {SUBAGENT_MODULE_PATH} --step 1 --arxiv-id $ARXIV_ID --dest-file \'$DEST_FILE\'',
-        model="opus",
+        model="fable",
         instruction="Launch one sub-agent per arXiv ID.\nUse a SINGLE message with multiple Task tool calls.\n\nThese markdown files become the scientific basis for downstream work.\nCost of error amplifies: subpar markdown -> subpar knowledge.",
     )
 
