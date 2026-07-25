@@ -6,7 +6,7 @@ Sub-agent definitions used by the planner and skill workflows.
 
 | File                  | What                                            | When to read                                     |
 | --------------------- | ----------------------------------------------- | ------------------------------------------------ |
-| `architect.md`        | Plan design agent (opus)                        | Modifying planning behavior, plan design prompts |
+| `architect.md`        | Plan design agent (fable)                       | Modifying planning behavior, plan design prompts |
 | `developer.md`        | Spec-to-code implementation agent (sonnet)      | Modifying implementation behavior, diff output   |
 | `debugger.md`         | Evidence-based root cause analysis agent        | Modifying debugging workflow                     |
 | `quality-reviewer.md` | Production risk and conformance review agent    | Modifying QR behavior, review criteria           |
