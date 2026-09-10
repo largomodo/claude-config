@@ -84,13 +84,39 @@ sed -n '1,80p' /tmp/page.md
 
 Read the whole file only when it is small or the task needs all of it.
 
+## When the Server Returns 403
+
+claude-env images set trafilatura's default user agent to the current Chrome
+release at build time, so plain fetches, feeds, and sitemaps already pass
+user-agent bot blocks. Confirm what the image is sending:
+
+```bash
+trafilatura-ua.sh --check "$(dirname "$(command -v trafilatura)")/python"
+```
+
+If that prints `trafilatura/...`, the image was built without the patch. If it
+prints an old Chrome major, the image is stale. Either way, download with curl
+and a fresh user agent, then let trafilatura extract:
+
+```bash
+UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36'
+curl -sL -A "$UA" <url> | trafilatura --markdown
+```
+
+Bump the Chrome major if that still returns a block page. A persistent 403
+with any user agent is a real bot block; report it to the user.
+
 ## When Output Is Empty or Truncated
 
 1. Retry with `--recall`.
-2. Retry with `--archived`.
+2. Retry with `--archived`. The Internet Archive copy may be stale; check its
+   date before trusting it.
 3. Check the raw HTML: `curl -sL <url> | head -c 2000`. A near-empty body or a
    challenge page means a bot block or a JavaScript-only page. trafilatura does
    not execute JavaScript. Report this to the user instead of retrying further.
+
+Front pages and index pages extract to a few teasers only; that is expected.
+Fetch the article URLs instead.
 
 ## When NOT to Use
 
