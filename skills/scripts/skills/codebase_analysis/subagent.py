@@ -11,12 +11,17 @@ Four-step workflow:
 Note: The focus area is NOT a CLI argument. The orchestrator provides focus
 in the subagent's launching prompt. This script emits guidance that refers
 to "the focus area" -- the agent knows what it is from its prompt context.
+
+Step 1 prepends the Serena read preamble: this script runs as a
+general-purpose sub-agent with no tools: allowlist, so every Serena tool
+sits deferred behind ToolSearch and Serena's own manual never reaches it
+otherwise -- the preamble's load hint is the only trigger it gets.
 """
 
 import argparse
 import sys
 
-from skills.lib.workflow.prompts import format_step
+from skills.lib.workflow.prompts import format_step, SERENA_READ_PREAMBLE
 
 
 # ============================================================================
@@ -64,7 +69,7 @@ MAP_INSTRUCTIONS = (
     "INPUT: Use entry points from Step 1.\n"
     "\n"
     "ACTIONS:\n"
-    "  1. Read key files identified in ORIENT\n"
+    "  1. Map entry points: get_symbols_overview then find_symbol for key symbols (Read for non-code files)\n"
     "  2. Trace imports, calls, data flow\n"
     "  3. Build component inventory\n"
     "  4. Identify relationships between components\n"
@@ -177,6 +182,9 @@ def format_output(step: int) -> str:
         return f"ERROR: Invalid step {step}"
 
     title, instructions = STATIC_STEPS[step]
+    if step == 1:
+        instructions = SERENA_READ_PREAMBLE + "\n\n" + instructions
+
     next_cmd = build_next_command(step)
     return format_step(instructions, next_cmd or "", title=f"CODEBASE EXPLORE - {title}")
 

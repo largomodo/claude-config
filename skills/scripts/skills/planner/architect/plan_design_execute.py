@@ -3,11 +3,15 @@
 
 6-step workflow for architect sub-agent:
   1. Task Analysis & Exploration Planning
-  2. Codebase Exploration (inline: Glob, Grep, Read)
+  2. Codebase Exploration (inline: Glob/Grep discovery, Serena symbol reads)
   3. Testing Strategy Discovery (may use question relay)
   4. Approach Generation
   5. Assumption Surfacing (may use question relay)
   6. Milestone Definition & Plan Writing
+
+Step 2's wording follows the Serena-first navigation policy: Glob/Grep
+locate candidates, Serena's symbol tools read the actual code, and Read
+stays reserved for non-code files.
 
 This is the EXECUTE script for first-time plan creation.
 For QR fix mode, see plan_design_qr_fix.py.
@@ -59,7 +63,7 @@ def get_step_guidance(
                 "",
                 "You will follow a 6-step workflow:",
                 "  1. Task Analysis & Exploration Planning (current)",
-                "  2. Codebase Exploration (inline: Glob, Grep, Read)",
+                "  2. Codebase Exploration (inline: Glob/Grep discovery, Serena symbol reads)",
                 "  3. Testing Strategy Discovery (may ask user)",
                 "  4. Approach Generation",
                 "  5. Assumption Surfacing (may ask user)",
@@ -101,7 +105,7 @@ def get_step_guidance(
             "actions": [
                 "STEP 2: CODEBASE EXPLORATION",
                 "",
-                "Use Glob, Grep, Read tools directly to discover:",
+                "Discover with Glob/Grep, then read symbols with Serena (see tool policy above):",
                 "  - Existing patterns and implementations",
                 "  - Constraints from code structure",
                 "  - Conventions to follow",

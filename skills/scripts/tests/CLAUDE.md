@@ -4,17 +4,18 @@ Test suite for skills workflow framework.
 
 ## Files
 
-| File                         | What                                                 | When to read                               |
-| ---------------------------- | ---------------------------------------------------- | ------------------------------------------ |
-| `README.md`                  | Test framework architecture, design decisions        | Understanding test design, modifying tests |
-| `conftest.py`                | Pytest configuration, fixtures, shared utilities     | Modifying test setup, adding fixtures      |
-| `test_workflow_import.py`    | Skill module import tests                            | Debugging import failures                  |
-| `test_workflow_structure.py` | Workflow structural validation tests                 | Debugging validation failures              |
-| `test_workflow_steps.py`     | Exhaustive parametrized tests for all workflow steps | Running workflow tests, debugging failures |
-| `test_qr_verify_routing.py`  | QR verify routing tests                              | Debugging QR verify routing                |
-| `test_domain_types.py`       | Unit tests for BoundedInt, ChoiceSet, Constant       | Testing domain type behavior               |
-| `test_generation.py`         | Schema extraction and input generation for tests     | Modifying test case generation             |
-| `test_ast.py`                | Property-based AST node and renderer tests           | Testing AST construction and rendering     |
+| File                         | What                                                 | When to read                                                       |
+| ---------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| `README.md`                  | Test framework architecture, design decisions        | Understanding test design, modifying tests                         |
+| `conftest.py`                | Pytest configuration, fixtures, shared utilities     | Modifying test setup, adding fixtures                              |
+| `test_workflow_import.py`    | Skill module import tests                            | Debugging import failures                                          |
+| `test_workflow_structure.py` | Workflow structural validation tests                 | Debugging validation failures                                      |
+| `test_workflow_steps.py`     | Exhaustive parametrized tests for all workflow steps | Running workflow tests, debugging failures                         |
+| `test_qr_verify_routing.py`  | QR verify routing tests                              | Debugging QR verify routing                                        |
+| `test_domain_types.py`       | Unit tests for BoundedInt, ChoiceSet, Constant       | Testing domain type behavior                                       |
+| `test_generation.py`         | Schema extraction and input generation for tests     | Modifying test case generation                                     |
+| `test_ast.py`                | Property-based AST node and renderer tests           | Testing AST construction and rendering                             |
+| `test_serena_policy.py`      | Serena tool-name, allowlist and preamble guards      | Changing agents tools lists, code-navigation convention, serena.py |
 
 ## Test Execution
 

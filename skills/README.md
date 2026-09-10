@@ -530,6 +530,7 @@ prompts/
     subagent.py         # dispatch templates
     step.py             # format_step()
     file.py             # format_file_content()
+    serena.py           # Serena tool policy constants (mirrors conventions/code-navigation.md)
 ```
 
 ### subagent.py

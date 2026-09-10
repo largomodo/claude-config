@@ -8,6 +8,12 @@ Five-step workflow per category:
   3. Pattern Generate  - Translate abstract hints to project-specific grep patterns
   4. Search            - Execute patterns, document findings
   5. Synthesis         - Format findings with severity assessment
+
+Step 1 prepends the Serena read preamble: this script runs as a
+general-purpose sub-agent with no tools: allowlist, so every Serena tool
+sits deferred behind ToolSearch until the preamble's load hint triggers
+it. Step 4 counts occurrences via Grep; Serena is used only for symbol
+reads and edits.
 """
 
 import argparse
@@ -21,6 +27,7 @@ from skills.lib.workflow.ast import (
     render_step_header, render_current_action, render_invoke_after,
 )
 from skills.lib.workflow.types import FlatCommand
+from skills.lib.workflow.prompts import SERENA_READ_PREAMBLE
 
 
 MODULE_PATH = "skills.refactor.explore"
@@ -127,6 +134,8 @@ def format_step_1(category_ref: str, mode: str = "code", scope: str | None = Non
     ]
 
     parts = [
+        SERENA_READ_PREAMBLE,
+        "",
         render_step_header(StepHeaderNode(title="Domain Context", script="explore", step=1, category=category_ref, mode=mode)),
         "",
         render(W.el("xml_mandate").build(), XMLRenderer()),
@@ -284,7 +293,7 @@ def format_step_4(category_ref: str, mode: str = "code", scope: str | None = Non
         "",
         "  1. Use Glob to find relevant files in scope",
         "  2. Use Grep with each pattern from <search_patterns>",
-        "  3. Use Read to examine suspicious matches",
+        "  3. Examine matches with find_symbol (include_body) or get_symbols_overview; Read only for non-code files",
         "  4. Apply the detection question from Step 2 to each match",
         "",
         "CROSS-FILE ANALYSIS:",

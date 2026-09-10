@@ -12,6 +12,10 @@
 This is the EXECUTE script for first-time post-impl documentation.
 For QR fix mode, see exec_docs_qr_fix.py.
 Router (exec_docs.py) dispatches to appropriate script.
+
+Step 5 corrections go through Serena's replace_content or an insert_*_symbol
+call for code, Edit for docs -- applied to the source file, never the plan
+file.
 """
 
 from skills.planner.shared.constraints import format_state_banner
@@ -185,7 +189,7 @@ def get_step_guidance(
                 "",
                 "If issues found:",
                 "  - Fix the comment in the actual source file",
-                "  - Use Edit tool on the source file (not plan file)",
+                "  - Edit the source file directly, not the plan file (replace_content / insert_*_symbol for code; Edit for docs)",
                 "",
                 "This is verification, not comprehensive review.",
                 "QR already validated; spot-check for transcription accuracy.",

@@ -11,12 +11,17 @@ Eight-step workflow:
   6. Perspective Contrast - Steel-man opposing view
   7. Failure Modes       - Actionable failure analysis
   8. Output Synthesis    - Structured output for parent aggregation
+
+Step 1 prepends the Serena read preamble: this script runs as a
+general-purpose sub-agent with no tools: allowlist, so every Serena tool
+sits deferred behind ToolSearch and Serena's own manual never reaches it
+otherwise -- the preamble's load hint is the only trigger it gets.
 """
 
 import argparse
 import sys
 
-from skills.lib.workflow.prompts import format_step
+from skills.lib.workflow.prompts import format_step, SERENA_READ_PREAMBLE
 
 
 # ============================================================================
@@ -160,7 +165,7 @@ ANALYSIS_INSTRUCTIONS = (
     "\n"
     "EXPLORATION OPTION:\n"
     "  If your analysis requires concrete evidence not in the shared context:\n"
-    "  - Use Read/Glob/Grep to examine specific files or patterns\n"
+    "  - Glob/Grep to discover, then Serena symbol tools to read code (Read for non-code files)\n"
     "  - Keep exploration targeted -- only what your perspective needs\n"
     "  - Cite evidence from exploration with file:line references\n"
     "  If shared context is sufficient, proceed without exploration.\n"
@@ -448,6 +453,9 @@ def format_output(step: int) -> str:
         return f"ERROR: Invalid step {step}"
 
     title, instructions = STATIC_STEPS[step]
+    if step == 1:
+        instructions = SERENA_READ_PREAMBLE + "\n\n" + instructions
+
     next_cmd = build_next_command(step)
     return format_step(instructions, next_cmd or "", title=f"DEEPTHINK SUB-AGENT - {title}")
 

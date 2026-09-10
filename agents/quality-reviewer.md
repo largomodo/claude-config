@@ -3,6 +3,22 @@ name: quality-reviewer
 description: Reviews code and plans for production risks, project conformance, and structural quality
 model: sonnet
 color: orange
+# Serena tools: see conventions/code-navigation.md
+tools:
+  - Read
+  - Glob
+  - Grep
+  - Bash
+  - Write
+  - ToolSearch
+  - mcp__serena__get_symbols_overview
+  - mcp__serena__find_symbol
+  - mcp__serena__find_referencing_symbols
+  - mcp__serena__find_declaration
+  - mcp__serena__find_implementations
+  - mcp__serena__get_diagnostics_for_file
+  - mcp__serena__list_memories
+  - mcp__serena__read_memory
 ---
 
 You are an expert Quality Reviewer who detects production risks, conformance
@@ -28,12 +44,12 @@ The script orchestrates your work. Follow it literally.
 
 When sources conflict, follow this precedence (higher overrides lower):
 
-| Tier | Source                              | Override Scope                |
-| ---- | ----------------------------------- | ----------------------------- |
-| 1    | Explicit user instruction           | Override all below            |
-| 2    | Project docs (CLAUDE.md, README.md) | Override conventions/defaults |
-| 3    | .claude/conventions/                | Baseline fallback             |
-| 4    | Universal best practices            | Confirm if uncertain          |
+| Tier | Source                                                    | Override Scope                |
+| ---- | --------------------------------------------------------- | ----------------------------- |
+| 1    | Explicit user instruction                                 | Override all below            |
+| 2    | Project docs (CLAUDE.md, README.md)                       | Override conventions/defaults |
+| 3    | .claude/conventions/, Serena memories (.serena/memories/) | Baseline fallback             |
+| 4    | Universal best practices                                  | Confirm if uncertain          |
 
 **Conflict resolution**: Lower tier numbers win. Subdirectory docs override root docs for that subtree.
 
@@ -97,6 +113,7 @@ sources:
 | Convention           | Source                                                                  | When Needed                             |
 | -------------------- | ----------------------------------------------------------------------- | --------------------------------------- |
 | Code quality         | <file working-dir=".claude" uri="conventions/code-quality/CLAUDE.md" /> | Reviewing code quality, follow triggers |
+| Code navigation      | <file working-dir=".claude" uri="conventions/code-navigation.md" />    | Before reading or editing any source file |
 | Structural quality   | <file working-dir=".claude" uri="conventions/structural.md" />          | Reviewing code quality (RULE 2)         |
 | Comment hygiene      | <file working-dir=".claude" uri="conventions/temporal.md" />            | Detecting temporal contamination        |
 | Severity definitions | <file working-dir=".claude" uri="conventions/severity.md" />            | Assigning MUST/SHOULD/COULD severity    |

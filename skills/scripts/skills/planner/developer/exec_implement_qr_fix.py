@@ -9,6 +9,16 @@
 This is the FIX script for post-QR repair.
 For first-time implementation, see exec_implement_execute.py.
 Router (exec_implement.py) dispatches to appropriate script.
+
+Temporal-contamination and structural fixes edit the source file directly
+through Serena's edit tools for code, Edit for non-code files -- never the
+plan file.
+
+Tool-neutral phrasing avoids naming Edit outright: an instruction that
+names Edit for a code file contradicts the preamble's rule against
+using Edit there, and contradictory instructions push an agent toward
+the tool it already knows instead of the required symbolic edit
+tools.
 """
 
 from skills.planner.shared.constraints import format_state_banner
@@ -88,7 +98,7 @@ def get_step_guidance(
                 "",
                 "Temporal contamination:",
                 "  - Rewrite comments to remove change-relative language",
-                "  - Use Edit tool on source files",
+                "  - Edit the source file directly (Serena edit tools for code; Edit for non-code files)",
                 "",
                 "Structural issues:",
                 "  - Extract functions if >50 lines",

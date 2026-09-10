@@ -1,6 +1,14 @@
 """CLI utilities for workflow scripts.
 
-Handles argument parsing and mode script entry points.
+Handles argument parsing and mode script entry points. mode_main() also
+injects the Serena tool-navigation preamble on step 1, choosing between a
+read-only and an edit-capable variant based on the calling script's module
+path; router scripts that hand off to another script's step 1 are skipped
+so the preamble is not printed twice in the same sub-agent turn.
+
+Orchestrator scripts (planner.py, executor.py) never call mode_main() and
+never receive this preamble; they carry ORCHESTRATOR_CONSTRAINT
+(skills.planner.shared.constraints) instead, unchanged by this policy.
 """
 
 import argparse
@@ -8,6 +16,7 @@ from pathlib import Path
 from typing import Callable
 
 from .prompts.step import format_step
+from .prompts.serena import SERENA_EDIT_PREAMBLE, SERENA_READ_PREAMBLE
 from .types import UserInputResponse
 
 
@@ -40,6 +49,23 @@ def _compute_module_path(script_file: str) -> str:
             return ".".join(module_parts)
     # Fallback: just use filename
     return path.stem
+
+
+def _serena_preamble_for(module_path: str) -> str:
+    """Select the Serena preamble variant for a mode script's module path.
+
+    The edit variant applies only when the module is an exec_* script of
+    the developer or technical_writer role package -- those are the only
+    scripts that modify source files. Every other script, including the
+    planning-only plan_code_* and plan_docs_* scripts of the same two
+    roles, gets the read variant.
+    """
+    parts = module_path.split(".")
+    role = parts[-2] if len(parts) >= 2 else ""
+    leaf = parts[-1] if parts else ""
+    if role in ("developer", "technical_writer") and leaf.startswith("exec_"):
+        return SERENA_EDIT_PREAMBLE
+    return SERENA_READ_PREAMBLE
 
 
 def add_standard_args(parser: argparse.ArgumentParser) -> None:
@@ -114,6 +140,13 @@ def mode_main(
     if parsed.step == 1:
         body_parts.append(THINKING_EFFICIENCY)
         body_parts.append("")
+
+        # Router hand-offs (guidance carries dispatch_to) skip injection
+        # here: the execute script's step 1 injects in the same sub-agent
+        # turn, so injecting on both would print the preamble twice.
+        if "dispatch_to" not in guidance_dict:
+            body_parts.append(_serena_preamble_for(module_path))
+            body_parts.append("")
 
     for action in guidance_dict["actions"]:
         body_parts.append(str(action))

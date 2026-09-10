@@ -15,6 +15,10 @@ Fix scripts separate from execute scripts:
 - Fix: targeted repair (QR failures guide changes)
 - Separation prevents fix logic from polluting execute logic
 - Fix scripts are shorter, focused on QR findings
+
+Codebase-issue fixes route through Serena's edit tools for code and Edit
+for non-code files, keeping this repair path aligned with the same
+navigation policy as first-time implementation.
 """
 
 from skills.planner.shared.constraints import format_state_banner
@@ -79,7 +83,7 @@ def get_step_guidance(
                 "     -> Fix by updating the diff in plan.json via CLI commands",
                 "",
                 "  2. CODEBASE ISSUES - Finding references an existing file not in plan.json",
-                "     -> Fix by editing the actual file directly using Edit tool",
+                "     -> Edit the source file directly (Serena edit tools for code; Edit for non-code files)",
                 "",
                 "For EACH failed item:",
                 "  1. Read the 'finding' field to understand the issue",
@@ -141,7 +145,7 @@ def get_step_guidance(
                 "    - Ensure context/add/remove prefixes are correct",
                 "",
                 "FOR CODEBASE ISSUES (existing files not in plan.json):",
-                "  Edit the actual file directly using Edit tool.",
+                "  Edit the source file directly (Serena edit tools for code; Edit for non-code files)",
                 "  These are issues in existing code that the plan depends on.",
                 "",
                 "CONSTRAINT: Fix ONLY the failing items. Don't refactor passing items.",

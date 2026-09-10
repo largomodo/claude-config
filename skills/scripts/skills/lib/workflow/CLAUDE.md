@@ -4,16 +4,16 @@ Workflow orchestration framework: metadata types, discovery, and prompt/output g
 
 ## Files
 
-| File              | What                                        | When to read                                        |
-| ----------------- | ------------------------------------------- | --------------------------------------------------- |
-| `README.md`       | Execution model, architecture, decisions    | Understanding framework design, prompt layers       |
-| `core.py`         | Workflow, StepDef, Arg (metadata only)      | Defining new skills, workflow structure             |
-| `discovery.py`    | Workflow discovery via importlib scanning   | Understanding pull-based discovery, troubleshooting |
-| `cli.py`          | CLI helpers for workflow entry points       | Adding CLI arguments, step output helpers           |
-| `constants.py`    | Shared constants, QR constants re-exports   | Adding new constants                                |
-| `types.py`        | Domain types: Dispatch, AgentRole, etc.     | QR gates, sub-agent dispatch, test domains          |
-| `quality_docs.py` | Content extraction from code quality docs   | Modifying quality doc parsing                       |
-| `__init__.py`     | Public API exports                          | Importing workflow types                            |
+| File              | What                                      | When to read                                                         |
+| ----------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| `README.md`       | Execution model, architecture, decisions  | Understanding framework design, prompt layers                        |
+| `core.py`         | Workflow, StepDef, Arg (metadata only)    | Defining new skills, workflow structure                              |
+| `discovery.py`    | Workflow discovery via importlib scanning | Understanding pull-based discovery, troubleshooting                  |
+| `cli.py`          | CLI helpers for workflow entry points     | Adding CLI arguments, step output helpers, Serena preamble injection |
+| `constants.py`    | Shared constants, QR constants re-exports | Adding new constants                                                 |
+| `types.py`        | Domain types: Dispatch, AgentRole, etc.   | QR gates, sub-agent dispatch, test domains                           |
+| `quality_docs.py` | Content extraction from code quality docs | Modifying quality doc parsing                                        |
+| `__init__.py`     | Public API exports                        | Importing workflow types                                             |
 
 ## Subdirectories
 

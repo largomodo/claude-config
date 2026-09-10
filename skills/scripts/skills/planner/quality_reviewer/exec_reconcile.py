@@ -7,6 +7,10 @@ current codebase. Supports resumable plan execution by detecting prior work.
 
 Sub-agents invoke this script immediately upon receiving their prompt.
 The script provides step-by-step guidance; the agent follows exactly.
+
+Step 2's search wording follows the Serena-first navigation policy: Grep
+locates candidate code, then get_symbols_overview/find_symbol examine it;
+Read stays reserved for non-code files.
 """
 
 STEPS = {
@@ -108,8 +112,8 @@ GOOD (neutral): "What synchronization primitive is used?" -> discovers reality
             "     'Expected: [specific code/behavior/file to find]'",
             "",
             "  2. SEARCH the codebase:",
-            "     - Use Grep to find relevant code",
-            "     - Use Read to examine candidate files",
+            "     - Grep to locate candidate code",
+            "     - get_symbols_overview / find_symbol to examine candidates (Read for non-code files)",
             "     - Check if behavior matches criterion",
             "",
             "  3. RECORD finding:",

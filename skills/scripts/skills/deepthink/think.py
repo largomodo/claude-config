@@ -19,6 +19,11 @@ Fourteen-step workflow (1-14):
   14. Formatting & Output   - Format and present final answer
 
 Two modes: Full (all steps) and Quick (skips 6-11).
+
+Exploration wording (Steps 1, 12, 13) points at Serena's symbol tools for
+code reads, Read for non-code files. This main-session script does not
+prepend a Serena preamble the way subagent.py does, because the main
+session already carries Serena's tool instructions from its own manual.
 """
 
 import argparse
@@ -57,7 +62,7 @@ CONTEXT_CLARIFICATION_INSTRUCTIONS = (
     "     - INSUFFICIENT: Need exploration before meaningful reasoning\n"
     "\n"
     "  C. IF NOT SUFFICIENT: Before proceeding to Part A, explore:\n"
-    "     - Use Read/Glob/Grep tools to gather necessary context\n"
+    "     - Glob/Grep to discover, Serena symbol tools to read code (Read for non-code files)\n"
     "     - Focus on specific files/patterns relevant to the question\n"
     "     - Stop exploring when you have enough to reason -- avoid over-exploration\n"
     "     - Document what you found in a brief EXPLORATION SUMMARY\n"
@@ -152,7 +157,7 @@ ABSTRACTION_INSTRUCTIONS = (
     "     - Is this a REASONABLE DEFAULT most users would accept? -> DEFAULT\n"
     "\n"
     "  3. VERIFICATION: Can tools confirm this?\n"
-    "     If verifiable: Use Read/Glob/Grep NOW. Document result.\n"
+    "     If verifiable: Glob/Grep to discover, Serena symbol tools to read code (Read for non-code files) NOW. Document result.\n"
     "     If not verifiable: Note 'needs user input'\n"
     "\n"
     "  <assumption_examples>\n"
@@ -313,7 +318,7 @@ PLANNING_INSTRUCTIONS = (
     "  VERIFICATION PASS:\n"
     "  For each MATERIAL assumption:\n"
     "  1. Attempt tool-based verification:\n"
-    "     - Codebase: Glob/Grep/Read for evidence\n"
+    "     - Codebase: Glob/Grep to discover, Serena symbol tools to read code (Read for non-code files)\n"
     "     - Documentation: README, config files, existing implementations\n"
     "     - Conversation: Re-scan for user statements that resolve it\n"
     "  2. Document: ASSUMPTION | METHOD | RESULT (verified/refuted/inconclusive)\n"
@@ -778,7 +783,7 @@ REFINEMENT_INSTRUCTIONS = (
     "\n"
     "  EXPLORATION OPTION:\n"
     "  If a verification question cannot be answered with existing evidence:\n"
-    "  - Use Read/Glob/Grep to find concrete evidence in the codebase\n"
+    "  - Glob/Grep to discover, Serena symbol tools to read code (Read for non-code files)\n"
     "  - This is especially valuable for UNGROUNDED claims from Step 12\n"
     "  - Keep exploration bounded -- answer the specific question, then stop\n"
     "  - Update answer with exploration findings and cite sources\n"
