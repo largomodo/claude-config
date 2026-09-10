@@ -24,6 +24,7 @@ Script-based agent workflows with shared orchestration framework.
 | `doc-sync/`          | Documentation synchronization              | Syncing docs across repos                |
 | `arxiv-to-md/`       | arXiv paper to markdown conversion         | Converting papers for LLM consumption    |
 | `cc-history/`        | Claude Code conversation history analysis  | Querying past conversations, token usage |
+| `web-fetch/`         | Fetch web pages with trafilatura           | Reading any URL (WebFetch is disabled)   |
 
 ## Script Invocation
 

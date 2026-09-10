@@ -384,3 +384,19 @@ For targeted updates:
 ```
 Use your doc-sync skill to update documentation in src/validators/
 ```
+
+### Web Fetch
+
+The built-in WebFetch tool summarizes every page through a small model before
+you see it. In my containers it is disabled, and pages are read with
+`trafilatura` instead: local extraction, exact text, no intermediary.
+
+The web-fetch skill documents the recipes -- single page, sitemap or feed
+discovery, PDFs, and how to read a large page without flooding context.
+
+```
+Read https://example.com/docs/getting-started and summarize the setup steps
+```
+
+The tool is installed by the container image, not this repo. Outside a
+container the skill falls back to `uvx trafilatura`.
