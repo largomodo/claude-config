@@ -31,7 +31,6 @@ from skills.planner.shared.qr.types import QRState, QRStatus, LoopState
 from skills.planner.shared.gates import GateResult
 from skills.planner.shared.qr.cli import add_qr_args
 from skills.planner.shared.resources import get_mode_script_path
-from skills.planner.shared.builders import THINKING_EFFICIENCY
 from skills.planner.shared.constants import (
     EXECUTOR_TOTAL_STEPS,
     EXECUTOR_GATE_STEPS,
@@ -412,9 +411,6 @@ def format_output(step: int, qr_status, state_dir, reconciliation_check=False,
         return f"Error: {guidance['error']}"
 
     body_parts = []
-    if step == 1:
-        body_parts.append(THINKING_EFFICIENCY)
-        body_parts.append("")
 
     for action in guidance["actions"]:
         body_parts.append(str(action))

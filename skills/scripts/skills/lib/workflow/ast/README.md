@@ -118,9 +118,16 @@ node = RosterDispatchNode(
     agents=("Task 1...", "Task 2...", "Task 3..."),
     command='python3 -m skills.subagent --step 1',
     model="sonnet",
+    effort="low",
 )
 xml = render_roster_dispatch(node)
 ```
+
+`effort` is optional on all three dispatch nodes (default `None`) and is
+validated against `EFFORT_LEVELS` from `lib/workflow/constants.py`; any other
+value raises `ValueError` at construction. The renderers always emit an
+effort line: the value when set, an explicit omit line when unset, so an
+effort chosen for one dispatch does not carry into the next.
 
 `targets` and `agents` are tuples (frozen dataclass fields). Substitution
 happens at render time via `string.Template`, so the LLM sees N final

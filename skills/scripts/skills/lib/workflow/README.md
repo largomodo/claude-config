@@ -104,11 +104,7 @@ importlib without executing skills' step logic.
 
 `mode_main()` is the standard entry point for mode scripts: parses `--step`
 plus QR args, calls the script's `get_step_guidance()`, and prints via
-`format_step()`. It injects `THINKING_EFFICIENCY` (terse-thinking mandate) on
-step 1 only -- once per workflow is enough; repeating it every step wastes
-tokens.
-
-`mode_main()` also injects the Serena REPL policy preamble on step 1,
+`format_step()`. It injects the Serena REPL policy preamble on step 1,
 skipping router hand-offs (guidance carrying `dispatch_to`) because the
 execute script's own step 1 injects in the same sub-agent turn. Both
 preambles share `SERENA_POLICY` and differ only in the role clauses:
@@ -174,8 +170,10 @@ implementations in unit tests.
 
 QR-related and dispatch-related prompt constants live in the lib layer so
 prompt builders can use them without depending on planner. Includes the HITL
-question-batching guidance, the sub-agent return token budget, and the
-question relay constants below.
+question-batching guidance, the `EFFORT_LEVELS` tuple shared by the
+plain-text and AST dispatch layers and `validate_effort()` (called by
+`prompts/subagent.py` when a dispatch is built; `ast/dispatch.py` keeps its own
+`_validate_effort` so the AST layer does not import the plain-text package), and the question relay constants below.
 
 ### Quality Docs (quality_docs.py)
 

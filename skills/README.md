@@ -12,6 +12,60 @@ Example:
 
 <invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.problem_analysis.analyze --step 1" />
 
+## Prompt Register
+
+Prompt text reaches a model through three surfaces with different lifetimes:
+agent definitions (`agents/*.md`) load on every invocation, script step text
+reaches a sub-agent as Bash stdout, and dispatch prompts are read by the
+orchestrator. Rules that apply across them:
+
+- **Register is a signal.** Capitalized emphasis (CRITICAL, NEVER, MANDATORY)
+  makes the model rigid and hedging. A rule keeps its reason and loses
+  its volume. A deletion needs a documented model behavior behind it, not
+  brevity.
+- **Trigger text and behavior text look identical to grep.** SKILL.md
+  frontmatter `description` is routing text matched against the user request;
+  skills under-trigger, so its urgency stays. The body is read after
+  triggering and shapes behavior, so it states the rule with its reason at
+  normal volume.
+- **Fragile bridges keep their exact requirements.** The invoke block (working
+  directory, command, copy-unchanged, first-action sentence), the
+  one-message parallel dispatch rule, the PASS/FAIL first line and the Script
+  Invocation section of each agent are the harness contract. Rewrites change
+  tone and add the reason; they never drop a requirement. The Script
+  Invocation section also pre-authorizes script stdout as an instruction
+  channel, which Sonnet otherwise treats as injection. Guard tests in
+  `tests/test_prompt_register.py` and `tests/test_dispatch_prompts.py` pin
+  these requirements.
+- **Guard tests duplicate prompt wording by design.** Those tests assert on
+  agent, SKILL.md and constant wording (including forbidden tokens),
+  so a reworded prompt that drops a requirement fails a test.
+- **Sub-agents are unattended.** Their only channel to the user is the
+  `<needs_user_input>` relay, so each agent's autonomy paragraph names it as
+  the one sanctioned stop. The orchestrator owns `AskUserQuestion`, so its
+  constant never says the user cannot answer.
+- **Prose does not shorten adaptive thinking.** Effort (agent frontmatter or
+  the dispatch `effort` line) is the control, so thinking-length instructions
+  and numeric return caps are absent; return size is bounded by writing detail
+  to files and returning status and metadata. The dispatch `effort` line is
+  the only per-dispatch effort control, and effort is the first cost lever
+  (model tier is second). The lever ships with no call site setting it
+  per dispatch; a manual sweep of dispatch sites sets it where a task needs
+  more or less thinking than the agent default.
+- **New shared constants name no Serena method.** Only the Task tool and
+  `effort` are named; a constant that names a Serena method needs a mirror in
+  `tests/test_serena_policy.py`.
+- **Review conservatism comes from QR RULE 2.** The closed RULE 2 category
+  list in `agents/quality-reviewer.md` plus the severity filter (MUST only for
+  RULE 0, SHOULD/COULD for RULE 2) keep reviewers from inventing structural
+  findings.
+- **Return size has no shared constant.** Each dispatch site writes the
+  return mechanism inline, so the wording fits the data being returned.
+- **Removal is a hypothesis.** Each deleted block rested on documented model
+  behavior, not a measured regression here. After a register change, run a
+  short planner session and re-add the smallest form of a block if behavior
+  regresses (for example, raise `effort` to `high` if verification drops).
+
 ## File Organization: The "Book" Pattern
 
 Skill files read top-to-bottom like a book. Dependencies are defined before use. The ordering principle: **a reader should never need to scroll up to understand what they're reading.**
@@ -547,15 +601,21 @@ prompts/
 
 Three dispatch patterns for spawning sub-agents via the Task tool:
 
-- `subagent_dispatch(agent_type, command, prompt="", model=None)` -- single sequential dispatch
-- `template_dispatch(agent_type, template, targets, command, ...)` -- parallel SIMD (same template, N targets with $var substitution)
-- `roster_dispatch(agent_type, agents, command, shared_context="", ...)` -- parallel MIMD (shared context + unique tasks)
+- `subagent_dispatch(agent_type, command, prompt="", model=None, effort=None)` -- single sequential dispatch
+- `template_dispatch(agent_type, template, targets, command, ..., effort=None)` -- parallel SIMD (same template, N targets with $var substitution)
+- `roster_dispatch(agent_type, agents, command, shared_context="", ..., effort=None)` -- parallel MIMD (shared context + unique tasks)
+
+`effort` is the Task tool's `effort` parameter. Valid values are the
+`EFFORT_LEVELS` tuple defined in `lib/workflow/constants.py` and re-exported
+by the prompts package; any other value raises `ValueError`. When `effort` is
+`None` the rendered text tells the orchestrator to omit the parameter, so a
+value set for an earlier dispatch does not carry forward.
 
 Building blocks (also exported):
 
-- `task_tool_instruction(agent_type, model)` -- how to use Task tool
+- `task_tool_instruction(agent_type, model, effort=None)` -- how to use Task tool
 - `sub_agent_invoke(cmd)` -- command the spawned agent runs
-- `parallel_constraint(count)` -- MANDATORY_PARALLEL enforcement
+- `parallel_constraint(count)` -- one-message dispatch rule
 
 ### step.py
 

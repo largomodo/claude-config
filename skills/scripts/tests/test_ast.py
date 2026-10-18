@@ -23,6 +23,18 @@ from skills.lib.workflow.ast import (
     render,
     W,
 )
+# EFFORT_LEVELS parametrizes the acceptance test so the test follows the tuple.
+from skills.lib.workflow.constants import EFFORT_LEVELS
+from skills.lib.workflow.ast.dispatch import (
+    SubagentDispatchNode,
+    TemplateDispatchNode,
+    RosterDispatchNode,
+)
+from skills.lib.workflow.ast.dispatch_renderer import (
+    render_subagent_dispatch,
+    render_template_dispatch,
+    render_roster_dispatch,
+)
 
 
 # Strategy builders for generative testing
@@ -236,6 +248,76 @@ class TestIntegration:
         assert "</inner>" in result
         assert "</middle>" in result
         assert "</outer>" in result
+
+
+class TestDispatchEffort:
+    """Effort field on the three dispatch nodes and its rendering.
+
+    The effort lever exists only if scripts can set it per dispatch, so every node type must
+    carry, validate and render it the same way.
+    """
+
+    @staticmethod
+    def _node(index, effort):
+        """One node of dispatch type `index` (0 subagent, 1 template, 2 roster) built with effort.
+
+        Construction runs __post_init__, so an invalid effort raises here.
+        """
+        builders = (
+            lambda: SubagentDispatchNode(agent_type="general-purpose", command="python3 -m x --step 1", effort=effort),
+            lambda: TemplateDispatchNode(
+                agent_type="general-purpose",
+                template="Explore $name",
+                targets=({"name": "a"}, {"name": "b"}),
+                command="python3 -m x --name $name",
+                effort=effort,
+            ),
+            lambda: RosterDispatchNode(
+                agent_type="general-purpose",
+                shared_context="ctx",
+                agents=("one", "two"),
+                command="python3 -m x --step 1",
+                effort=effort,
+            ),
+        )
+        return builders[index]()
+
+    def _nodes(self, effort):
+        """One node of each dispatch type built with the same effort."""
+        return [self._node(i, effort) for i in range(3)]
+
+    def test_effort_rendered_for_each_node_type(self):
+        """A set effort reaches the rendered text of every node type."""
+        sub, tpl, ros = self._nodes("low")
+        assert "<effort>low</effort>" in render_subagent_dispatch(sub)
+        assert "Set effort: low on each Task call." in render_template_dispatch(tpl)
+        assert "Set effort: low on each Task call." in render_roster_dispatch(ros)
+
+    def test_unset_effort_renders_explicit_omit_line(self):
+        """An unset effort renders an explicit omit line, so no value carries over from a previous step."""
+        sub, tpl, ros = self._nodes(None)
+        assert "<effort>DEFAULT (omit effort parameter from Task tool)</effort>" in render_subagent_dispatch(sub)
+        assert "Omit the effort parameter (agent default)." in render_template_dispatch(tpl)
+        assert "Omit the effort parameter (agent default)." in render_roster_dispatch(ros)
+
+    @pytest.mark.parametrize("index", [0, 1, 2], ids=["subagent", "template", "roster"])
+    @pytest.mark.parametrize("effort", ["turbo", "HIGH", ""])
+    def test_unknown_effort_raises_at_construction(self, index, effort):
+        """Values outside EFFORT_LEVELS, including wrong case and the empty string, fail when each node type is built."""
+        with pytest.raises(ValueError, match="effort must be one of"):
+            self._node(index, effort)
+
+    @pytest.mark.parametrize("effort", EFFORT_LEVELS)
+    def test_every_level_is_accepted(self, effort):
+        """The accepted set equals EFFORT_LEVELS, so a level added there is covered without editing this test."""
+        assert len(self._nodes(effort)) == 3
+
+    def test_parallel_constraint_type_and_count(self):
+        """The parallel constraint uses type=parallel and states the dispatch count in its one-message sentence."""
+        _, tpl, ros = self._nodes(None)
+        for out in (render_template_dispatch(tpl), render_roster_dispatch(ros)):
+            assert '<execution_constraint type="parallel">' in out
+            assert "Send all 2 Task calls in this one message" in out
 
 
 if __name__ == "__main__":

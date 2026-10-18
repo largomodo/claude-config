@@ -70,7 +70,7 @@ BoundedInt(1, 5) for iteration domain matches QR_ITERATION_LIMIT constant. Hardc
 
 ### Planner Scripts Tested In-Process
 
-Planner scripts (orchestrator, QR, fix-mode, handoff) sit outside the Workflow harness that test_workflow_steps.py enumerates, so their tests import the modules and call `get_step_guidance` or the command functions directly. Assertions on dispatch and step text repeat the prompt wording; the duplication is accepted because a reworded prompt that drops a rule such as run-every-step-until-the-file-exists should fail a test.
+Planner scripts (orchestrator, QR, fix-mode, handoff) sit outside the Workflow harness that test_workflow_steps.py enumerates, so their tests import the modules and call `get_step_guidance` or the command functions directly. Assertions on dispatch and step text repeat the prompt wording; the duplication is accepted because a reworded prompt that drops a rule such as run-every-step-until-the-file-exists should fail a test. `test_prompt_register.py` (agent autonomy paragraph, Script Invocation, SKILL.md bodies, orchestrator constants, forbidden tokens) and `test_dispatch_prompts.py` (invoke block, parallel text, effort line) follow the same rule: they repeat wording on purpose so a rewrite cannot drop a harness requirement unnoticed.
 
 ### Optional Dependencies and the Canonical Command
 

@@ -171,11 +171,10 @@ def format_incoherence_output(step, phase, agent_type, guidance, total):
     parts.append("")
 
     if step == 1:
+        # Bridge text: the script carries workflow state, so commands are copied unchanged and steps are not
+        # skipped. Each requirement is stated with its reason.
         parts.append("""<xml_format_mandate>
-CRITICAL: All script outputs use XML format. You MUST:
-1. Execute the action in <current_action>
-2. When complete, invoke the exact command in <invoke_after>
-3. DO NOT modify commands. DO NOT skip steps.
+Script outputs use XML. Execute the action in <current_action>, then invoke the exact command in <invoke_after>. Commands are copied unchanged and no step is skipped: the script carries the workflow state.
 </xml_format_mandate>""")
         parts.append("")
 

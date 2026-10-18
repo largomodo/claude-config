@@ -46,6 +46,7 @@ RosterDispatchNode: Parallel dispatch with unique prompts
             ),
             command='python3 -m skills.subagent --step 1',
             model="sonnet",
+            effort="low",
         )
         # Each agent receives shared_context + unique prompt
 
@@ -56,6 +57,15 @@ Design rationale:
 """
 
 from dataclasses import dataclass
+
+# Imported from the lib constants module, not from the plain-text prompts package, so the typed AST layer
+# does not depend on its sibling.
+from skills.lib.workflow.constants import EFFORT_LEVELS
+
+
+def _validate_effort(effort: str | None) -> None:
+    if effort is not None and effort not in EFFORT_LEVELS:
+        raise ValueError(f"effort must be one of {', '.join(EFFORT_LEVELS)}")
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,15 @@ class SubagentDispatchNode:
     command: str                 # invoke command for step 1
     prompt: str = ""             # optional context; empty = no <prompt> element
     model: str | None = None     # "haiku", "sonnet", "opus", "fable"
+    effort: str | None = None    # "low", "medium", "high", "xhigh", "max"
+
+    def __post_init__(self):
+        """Reject an effort outside EFFORT_LEVELS at construction.
+
+        Raises:
+            ValueError: If effort is set and not in EFFORT_LEVELS
+        """
+        _validate_effort(self.effort)
 
 
 @dataclass(frozen=True)
@@ -87,7 +106,16 @@ class TemplateDispatchNode:
     targets: tuple[dict[str, str], ...]  # variable bindings per target (tuple for frozen)
     command: str                       # command with $var placeholders
     model: str | None = None
+    effort: str | None = None          # "low", "medium", "high", "xhigh", "max"
     instruction: str | None = None     # optional instruction text
+
+    def __post_init__(self):
+        """Reject an effort outside EFFORT_LEVELS at construction.
+
+        Raises:
+            ValueError: If effort is set and not in EFFORT_LEVELS
+        """
+        _validate_effort(self.effort)
 
 
 @dataclass(frozen=True)
@@ -106,7 +134,16 @@ class RosterDispatchNode:
     agents: tuple[str, ...]            # unique prompt per agent (tuple for frozen)
     command: str                       # fixed: same for all agents
     model: str | None = None
+    effort: str | None = None          # "low", "medium", "high", "xhigh", "max"
     instruction: str | None = None     # optional instruction text
+
+    def __post_init__(self):
+        """Reject an effort outside EFFORT_LEVELS at construction.
+
+        Raises:
+            ValueError: If effort is set and not in EFFORT_LEVELS
+        """
+        _validate_effort(self.effort)
 
 
 __all__ = [

@@ -6,6 +6,9 @@ read, edit and docs variants based on the calling script's module path;
 router scripts that hand off to another script's step 1 are skipped
 so the preamble is not printed twice in the same sub-agent turn.
 
+Adaptive thinking is not shortened by prose, so effort (agent frontmatter, or the dispatch effort line)
+is the thinking-length control.
+
 Orchestrator scripts (planner.py, executor.py) never call mode_main() and
 never receive this preamble; they carry ORCHESTRATOR_CONSTRAINT
 (skills.planner.shared.constraints) instead.
@@ -22,15 +25,6 @@ from .prompts.serena import (
     SERENA_READ_PREAMBLE,
 )
 from .types import UserInputResponse
-
-
-# Injected on step 1 only. Replaces the deleted xml_format_mandate.
-THINKING_EFFICIENCY = (
-    "THINKING EFFICIENCY:\n"
-    "  Max 5 words per step. Symbolic notation preferred.\n"
-    '  Good: "Patterns needed -> grep auth -> found 3"\n'
-    '  Bad: "For the patterns we need, let me search for auth..."'
-)
 
 
 def _compute_module_path(script_file: str) -> str:
@@ -149,9 +143,6 @@ def mode_main(
     # Build body from actions list
     body_parts = []
     if parsed.step == 1:
-        body_parts.append(THINKING_EFFICIENCY)
-        body_parts.append("")
-
         # Router hand-offs (guidance carries dispatch_to) skip injection
         # here: the execute script's step 1 injects in the same sub-agent
         # turn, so injecting on both would print the preamble twice.

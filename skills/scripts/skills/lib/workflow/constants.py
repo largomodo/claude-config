@@ -2,6 +2,13 @@
 
 QR-related constants are defined here in the lib layer so that
 formatters can use them without creating a dependency on planner.
+
+Sub-agent return sizing is stated inline where a script dispatches: write detail to files, return status
+and metadata, drop low-relevance items before shortening high-relevance ones. Numeric per-item caps starve
+the reasoning that adaptive thinking spends on each item.
+
+No constant in this module names a Serena method. Serena method names live in prompts/serena.py, which
+tests/test_serena_policy.py mirrors; a constant here that named one would need its own mirror there.
 """
 
 
@@ -38,25 +45,32 @@ EXAMPLE (don't batch):
 
 
 # =============================================================================
-# Subagent Return Constants
+# Effort Constants
 # =============================================================================
+# Effort is the primary cost lever: it sets how much the model thinks per turn, and adaptive thinking is
+# not shortened by prose. It is data in the lib layer because the plain-text and AST dispatch layers are sibling
+# packages that must not import each other.
 
-SUBAGENT_RETURN_BUDGET = """\
-<return_budget>
-TOKEN BUDGET (ENFORCED):
-  - Total return: MAX 1500 tokens
-  - Per section: MAX 500 tokens
-  - Per finding/item: MAX 50 tokens
+# Effort values the Task tool and agent frontmatter accept in Claude Code. Both
+# dispatch layers (prompts/subagent.py and ast/dispatch.py) import this tuple
+# so neither imports the other.
+# The set is closed: the Task tool accepts exactly these five values, so any other value would fail at the
+# tool call, far from where it was written. Both dispatch layers reject it when the dispatch is built.
+# None (the parameter default everywhere) means the agent's frontmatter effort applies; dispatch text then
+# tells the orchestrator to omit the parameter.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 
-COMPRESSION STYLE:
-  VERBOSE: 'The module implements a factory pattern that creates service
-           instances, enabling dependency injection and testability...'
-  DRAFT:   'Factory pattern -> DI + testability'
 
-If findings exceed budget, OMIT low-relevance items.
-Write detailed content to FILES, return only status + metadata.
-</return_budget>
-"""
+def validate_effort(effort: str | None) -> None:
+    """Reject an effort outside EFFORT_LEVELS.
+
+    None is valid and means the agent's frontmatter effort applies.
+
+    Raises:
+        ValueError: If effort is set and not in EFFORT_LEVELS
+    """
+    if effort is not None and effort not in EFFORT_LEVELS:
+        raise ValueError(f"effort must be one of {', '.join(EFFORT_LEVELS)}")
 
 
 # =============================================================================

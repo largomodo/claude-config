@@ -108,9 +108,9 @@ CONTEXT_CLARIFICATION_INSTRUCTIONS = (
 
 # --- STEP 2: ABSTRACTION ----------------------------------------------------
 
+# The step output list defines what is returned.
 ABSTRACTION_INSTRUCTIONS = (
     "Before diving into specifics, step back and identify high-level context.\n"
-    "Work through this thoroughly. Avoid shortcuts. Show reasoning step by step.\n"
     "\n"
     "PART A - DOMAIN:\n"
     "  What field or domain does this question primarily belong to?\n"
@@ -645,10 +645,10 @@ AGGREGATION_INSTRUCTIONS = (
 
 # --- STEP 12: INITIAL_SYNTHESIS ---------------------------------------------
 
+# The synthesis guidelines list the sections the output must contain.
 SYNTHESIS_FULL_INSTRUCTIONS = (
     "Integrate aggregated findings into a coherent response.\n"
     "Hint: Prioritize aspects matching the EVALUATION CRITERIA from Step 3.\n"
-    "Work through thoroughly. Avoid shortcuts. Show reasoning step by step.\n"
     "\n"
     "SYNTHESIS GUIDELINES:\n"
     "  1. Use evaluation criteria from Step 3 to guide integration\n"
@@ -710,10 +710,10 @@ SYNTHESIS_FULL_INSTRUCTIONS = (
     "This synthesis will be evaluated in Step 13. Expect to refine it."
 )
 
+# PART A-C list the sections the quick synthesis must contain.
 SYNTHESIS_QUICK_INSTRUCTIONS = (
     "Based on abstraction (Step 2) and analogies (Step 4), synthesize response.\n"
     "Hint: Prioritize aspects matching the EVALUATION CRITERIA from Step 3.\n"
-    "Work through thoroughly. Avoid shortcuts. Show reasoning step by step.\n"
     "\n"
     "PART A - CORE ANSWER:\n"
     "  What is your response to the original question?\n"
@@ -753,6 +753,7 @@ SYNTHESIS_QUICK_INSTRUCTIONS = (
 
 # --- STEP 13: ITERATIVE_REFINEMENT ------------------------------------------
 
+# Each iteration must find real defects: a quick 'looks good' verdict ends refinement without testing the synthesis.
 REFINEMENT_INSTRUCTIONS = (
     "ITERATION {iteration} OF {max_iter}\n"
     "\n"
@@ -760,7 +761,7 @@ REFINEMENT_INSTRUCTIONS = (
     "to step 14 unless confidence is CERTAIN or this is iteration 5.\n"
     "\n"
     "Critically evaluate the current synthesis.\n"
-    "Work through thoroughly -- avoid quick 'looks good' assessments.\n"
+    "Avoid quick 'looks good' assessments.\n"
     "\n"
     "PART A - VERIFICATION QUESTION GENERATION:\n"
     "  Generate 3-5 verification questions that would test correctness.\n"

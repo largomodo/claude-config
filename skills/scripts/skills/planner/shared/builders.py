@@ -4,13 +4,6 @@ Constants for static text, functions for parameterized output.
 """
 
 
-THINKING_EFFICIENCY = (
-    "THINKING EFFICIENCY:\n"
-    "  Max 5 words per step. Symbolic notation preferred.\n"
-    "  -> for implies | for alternatives ; for sequence\n"
-    '  Example: "QR failed -> route step 8 | iteration++"'
-)
-
 PEDANTIC_ENFORCEMENT = (
     "QR exists to catch problems BEFORE they reach production.\n"
     "ALL issues must be fixed before proceeding."

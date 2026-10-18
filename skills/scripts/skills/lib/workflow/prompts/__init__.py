@@ -4,6 +4,9 @@ Prompts as strings composed via f-strings. No XML, no AST.
 """
 
 from skills.lib.workflow.prompts.subagent import (
+    # Configuration
+    # EFFORT_LEVELS is re-exported so leaf scripts that pick an effort per dispatch import it from here.
+    EFFORT_LEVELS,
     # Building blocks
     task_tool_instruction,
     sub_agent_invoke,
@@ -35,6 +38,8 @@ from skills.lib.workflow.prompts.serena import (
 # Renaming a name listed here requires updating its importers (cli.py, leaf
 # scripts, tests) in the same change.
 __all__ = [
+    # Configuration
+    "EFFORT_LEVELS",
     # Building blocks
     "task_tool_instruction",
     "sub_agent_invoke",

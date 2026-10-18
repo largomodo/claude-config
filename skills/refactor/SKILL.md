@@ -5,7 +5,7 @@ description: Invoke IMMEDIATELY via python script when user requests refactoring
 
 # Refactor
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the workflow.
+Run the script first and follow its output; it orchestrates the work, so exploring or analyzing beforehand duplicates its steps.
 
 ## Invocation
 
@@ -15,8 +15,6 @@ When this skill activates, IMMEDIATELY invoke the script. The script IS the work
 | -------- | -------- | --------------------------------------------- |
 | `--step` | Yes      | Current step (starts at 1)                    |
 | `--n`    | No       | Number of categories to explore (default: 10) |
-
-Do NOT explore or analyze first. Run the script and follow its output.
 
 ## Determining N (category count)
 

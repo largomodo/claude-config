@@ -100,13 +100,17 @@ passes review before the next starts.
 
 ### Cost-Effective Delegation
 
-The orchestrator delegates to smaller agents -- Haiku for straightforward tasks,
+The orchestrator delegates on two axes. Effort (low, medium, high, xhigh, max)
+is the primary cost lever: it sets how much a sub-agent
+thinks and how far it carries a task before reporting back. It is set per
+agent in frontmatter and per dispatch through the Task tool's `effort`
+parameter. Model tier is the second axis -- Haiku for straightforward tasks,
 Sonnet for moderate complexity. Prompts are injected just-in-time, giving
 smaller models precisely the guidance they need at each step.
 
-When quality review fails or problems recur, the orchestrator escalates to
-higher-quality models. Expensive models are reserved for genuine ambiguity, not
-routine work.
+When quality review fails or problems recur, the orchestrator raises effort
+first and escalates to higher-quality models after that. Expensive models are
+reserved for genuine ambiguity, not routine work.
 
 ## Does This Actually Work?
 

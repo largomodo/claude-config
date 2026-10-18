@@ -1059,17 +1059,10 @@ def format_step_1_output(n: int, info: dict, mode_filter: str, scope: str | None
     parts.append(render_step_header(StepHeaderNode(title=info["title"], script="refactor", step=1)))
     parts.append("")
 
+    # Bridge text: the script carries workflow state, so commands are copied unchanged and steps are not
+    # skipped. Each requirement is stated with its reason.
     xml_mandate_text = """<xml_format_mandate>
-CRITICAL: All script outputs use XML format. You MUST:
-
-1. Execute the action in <current_action>
-2. When complete, invoke the exact command in <invoke_after>
-3. The <next> block re-states the command -- execute it
-4. For branching <invoke_after>, choose based on outcome:
-   - <if_custom>: Use when mode is CUSTOM
-   - <if_not_custom>: Use when mode is design/code/both
-
-DO NOT modify commands. DO NOT skip steps. DO NOT interpret.
+Script outputs use XML. Execute the action in <current_action>, then invoke the exact command in <invoke_after>; the <next> block restates it. For a branching <invoke_after>, <if_custom> applies when mode is CUSTOM and <if_not_custom> when mode is design, code or both. Commands are copied unchanged and no step is skipped: the script carries the workflow state, so a modified command loses it.
 </xml_format_mandate>"""
     parts.append(xml_mandate_text)
     parts.append("")
@@ -1166,13 +1159,10 @@ def format_step_2_dispatch(n: int, info: dict, mode_filter: str, scope: str | No
     parts.append(render_step_header(StepHeaderNode(title=info["title"], script="refactor", step=2)))
     parts.append("")
 
+    # Bridge text: the script carries workflow state, so commands are copied unchanged and steps are not
+    # skipped. Each requirement is stated with its reason.
     xml_mandate_text = """<xml_format_mandate>
-CRITICAL: All script outputs use XML format. You MUST:
-
-1. Execute the action in <current_action>
-2. When complete, invoke the exact command in <invoke_after>
-
-DO NOT modify commands. DO NOT skip steps. DO NOT interpret.
+Script outputs use XML. Execute the action in <current_action>, then invoke the exact command in <invoke_after>. Commands are copied unchanged and no step is skipped: the script carries the workflow state, so a modified command loses it.
 </xml_format_mandate>"""
     parts.append(xml_mandate_text)
     parts.append("")
@@ -1363,10 +1353,11 @@ def format_step_4_dispatch_custom(info: dict, scope: str | None = None) -> str:
         "    Launch one general-purpose sub-agent per verified category.",
         "  </instruction>",
         "",
-        '  <execution_constraint type="MANDATORY_PARALLEL">',
-        "    You MUST dispatch ALL agents in ONE assistant message.",
-        "    FORBIDDEN: Waiting for any agent before dispatching the next.",
-        '    FORBIDDEN: Using "Explore" subagent_type. Use "general-purpose".',
+        # Hand-written copy of dispatch_renderer's execution_constraint; both use type=parallel and the same
+        # sentence so the library and this script give one signal.
+        '  <execution_constraint type="parallel">',
+        "    Send all N Task calls in this one message; none depends on another's result.",
+        '    Use subagent_type "general-purpose", not "Explore".',
         "  </execution_constraint>",
         "",
         "  <model_selection>",

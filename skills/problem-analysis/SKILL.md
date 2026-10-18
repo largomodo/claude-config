@@ -12,4 +12,4 @@ it.
 
 <invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.problem_analysis.analyze --step 1" />
 
-Do NOT explore or analyze first. Run the script and follow its output.
+Run the script first and follow its output; it orchestrates the work, so exploring or analyzing beforehand duplicates its steps.

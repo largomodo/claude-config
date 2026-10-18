@@ -207,10 +207,12 @@ def get_step_guidance(
                 "",
                 "---",
                 "",
-                "OUTPUT FORMAT (MINIMAL - orchestrator reads plan.json directly):",
+                # WHY status lines only: the orchestrator reads plan.json directly, so repeating content in
+                # the return adds orchestrator context with no reader. The status-only rule bounds the return.
+                "OUTPUT FORMAT (the orchestrator reads plan.json directly):",
                 "",
-                "TOKEN BUDGET: MAX 200 tokens for return message.",
-                "DO NOT include diff content in return. plan.json has the changes.",
+                "Return status lines only; plan.json carries the content.",
+                "Do not include diff content in the return; plan.json has the changes.",
                 "",
                 "If all code_changes added successfully:",
                 "  'COMPLETE: Code changes added for [N] intents.'",

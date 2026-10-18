@@ -5,8 +5,7 @@ description: Invoke IMMEDIATELY via python script when user requests prompt opti
 
 # Prompt Engineer
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the
-workflow.
+Run the script first and follow its output; it orchestrates the work, so exploring or analyzing beforehand duplicates its steps.
 
 ## Invocation
 
@@ -29,5 +28,3 @@ Then continue with determined scope:
 - **ecosystem**: Multiple related prompts that interact
 - **greenfield**: No existing prompt, designing from requirements
 - **problem**: Existing prompt(s) with specific issue to fix
-
-Do NOT analyze or explore first. Run the script and follow its output.

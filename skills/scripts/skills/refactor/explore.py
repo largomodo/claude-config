@@ -378,25 +378,7 @@ def format_step_5(category_ref: str, mode: str = "code", scope: str | None = Non
         "",
         "OUTPUT FORMAT (strict):",
         "",
-        # WHY token budget increased from 50 to 100 tokens per finding:
-        #
-        # Minimum viable evidence requires:
-        #   - Code snippet (2-5 lines): 45-75 tokens with indentation
-        #   - Impact statement: 25-40 tokens for "Blocks X because Y"
-        #   - Occurrences metadata: 15-25 tokens (count + verification)
-        #   Total: 85-140 tokens for complete evidence
-        #
-        # At 50 tokens, agents were forced to choose between:
-        #   - Code OR impact (incomplete evidence)
-        #   - Truncated code (not compilable/verifiable)
-        #   - Generic impact (not specific to this codebase)
-        #
-        # 100 tokens is the minimum that fits all 4 evidence components without truncation.
-        #
-        # WHY max 8 findings instead of unlimited with 50-token budget:
-        #
-        # Previous model: 500 tokens / 50 per finding = 10 findings (but all truncated)
-        # New model: 1200 tokens / 100 per finding = 12 findings (but capped at 8)
+        # WHY max 8 findings:
         #
         # The 8-finding cap forces prioritization BEFORE writing:
         #   - Agents must rank by severity, not report exhaustively
@@ -406,14 +388,22 @@ def format_step_5(category_ref: str, mode: str = "code", scope: str | None = Non
         # This is better than post-hoc filtering because:
         #   - Agents have full search context (Cluster step does not)
         #   - Severity judgment happens closest to the code
-        #   - Token budget concentrates on high-value findings
-        "TOKEN BUDGET (ENFORCED):",
-        "  - Total return: MAX 1200 tokens",
-        "  - Finding count limit: MAX 8 findings",
-        "  - Per finding: MIN 100 tokens (evidence must be verifiable)",
-        "  - Budget breakdown: 75 tokens code (5 lines) + 40 impact + 25 occurrence = 140 typical",
-        "  - If > 8 findings, keep highest severity with cross-file evidence priority",
-        "  - If budget pressure, prefer 3-line code snippets over dropping findings",
+        #
+        # WHY every finding carries a snippet, an impact statement and an
+        # occurrence count:
+        #
+        # A finding is verifiable downstream only with all three. The snippet
+        # shows the code is real, the impact states what it blocks, degrades
+        # or risks, and the occurrence count shows how widespread it is.
+        #
+        # WHY the return is bounded by finding count:
+        #
+        # Each finding carries the evidence that makes it verifiable. The finding-count cap and the
+        # drop order bound the return, and low-relevance findings go first.
+        "RETURN FORMAT:",
+        "  - At most 8 findings; if more, keep the highest severity, cross-file evidence first",
+        "  - Each finding carries a verifiable code snippet (3-5 lines), an impact statement and an occurrence count",
+        "  - Drop low-relevance findings before shortening high-relevance ones",
         "",
         # WHY impact tag requires "Blocks/Degrades/Risks" structure:
         #

@@ -58,28 +58,23 @@ def _expand_template_targets(template: str, command: str, targets: tuple[dict[st
 
 
 def _build_execution_constraint(count: int) -> str:
-    """Build MANDATORY_PARALLEL execution constraint XML."""
+    """Build parallel execution constraint XML.
+
+    The type attribute is read by the model as part of the register, so it is "parallel", and the body
+    states the batching requirement with its reason (the calls are independent). refactor.py writes the
+    same block by hand, so the two change together.
+    """
     lines = [
-        '  <execution_constraint type="MANDATORY_PARALLEL">',
-        f"    You MUST dispatch ALL {count} agents in ONE assistant message.",
-        "    Your message must contain exactly N Task tool calls, issued together.",
-        "",
-        "    CORRECT (single message, multiple tools):",
-        "      [You send ONE message containing Task call 1, Task call 2, ... Task call N]",
-        "",
-        "    WRONG (sequential):",
-        "      [You send message with Task call 1]",
-        "      [You wait for result]",
-        "      [You send message with Task call 2]",
-        "",
-        "    FORBIDDEN: Waiting for any agent before dispatching the next.",
+        '  <execution_constraint type="parallel">',
+        f"    Send all {count} Task calls in this one message; none depends on another's result.",
+        f"    One message containing Task call 1 through Task call {count}, not one call per message.",
         "  </execution_constraint>",
     ]
     return "\n".join(lines)
 
 
-def _build_model_selection(model: str | None) -> str:
-    """Build model selection guidance XML.
+def _build_model_selection(model: str | None, effort: str | None) -> str:
+    """Build model and effort selection guidance XML.
 
     Always emits explicit guidance, even when model is None. This prevents
     LLM pattern-matching errors where model selection from a previous step
@@ -88,21 +83,23 @@ def _build_model_selection(model: str | None) -> str:
 
     Silent omission (returning "") leaves the LLM to infer from prior context.
     Explicit "use default" provides a counter-signal that breaks the
-    pattern-matching chain.
+    pattern-matching chain. Effort gets the same explicit-default treatment
+    as model, for the same reason.
+
+    Model and effort share one block so the orchestrator reads both Task parameters together.
     """
     if model is None:
-        lines = [
-            "  <model_selection>",
+        body = [
             "    Use DEFAULT model (omit model parameter from Task tool).",
-            "    Do NOT carry forward model selections from previous steps.",
-            "  </model_selection>",
+            "    Do not carry forward model selections from previous steps.",
         ]
-        return "\n".join(lines)
-    lines = [
-        "  <model_selection>",
-        f"    Use {model.upper()} for all agents.",
-        "  </model_selection>",
-    ]
+    else:
+        body = [f"    Use {model.upper()} for all agents."]
+    if effort is None:
+        body.append("    Omit the effort parameter (agent default).")
+    else:
+        body.append(f"    Set effort: {effort} on each Task call.")
+    lines = ["  <model_selection>", *body, "  </model_selection>"]
     return "\n".join(lines)
 
 
@@ -134,6 +131,13 @@ def render_subagent_dispatch(node: SubagentDispatchNode) -> str:
         lines.append(f'  <model>{node.model}</model>')
     else:
         lines.append('  <model>DEFAULT (omit model parameter from Task tool)</model>')
+
+    # Same explicit-default treatment as model: a missing effort renders as DEFAULT so a value from an
+    # earlier step is not reused.
+    if node.effort:
+        lines.append(f'  <effort>{node.effort}</effort>')
+    else:
+        lines.append('  <effort>DEFAULT (omit effort parameter from Task tool)</effort>')
 
     if node.prompt:
         lines.append("  <prompt>")
@@ -185,7 +189,8 @@ def render_template_dispatch(node: TemplateDispatchNode) -> str:
 
     lines.append(_build_execution_constraint(count))
     lines.append("")
-    lines.append(_build_model_selection(node.model))
+    # Template dispatch: one model/effort block covers every agent entry.
+    lines.append(_build_model_selection(node.model, node.effort))
     lines.append("")
 
     lines.append("  <agents>")
@@ -240,7 +245,8 @@ def render_roster_dispatch(node: RosterDispatchNode) -> str:
 
     lines.append(_build_execution_constraint(count))
     lines.append("")
-    lines.append(_build_model_selection(node.model))
+    # Roster dispatch: one model/effort block covers every agent entry.
+    lines.append(_build_model_selection(node.model, node.effort))
     lines.append("")
 
     if node.shared_context:

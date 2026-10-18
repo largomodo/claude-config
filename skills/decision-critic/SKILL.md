@@ -5,8 +5,7 @@ description: Invoke IMMEDIATELY via python script to stress-test decisions and r
 
 # Decision Critic
 
-When this skill activates, IMMEDIATELY invoke the script. The script IS the
-workflow.
+Run the script first and follow its output; it orchestrates the work, so exploring or analyzing beforehand duplicates its steps.
 
 ## Invocation
 
@@ -16,5 +15,3 @@ workflow.
 | --------------- | -------- | --------------------------------------- |
 | `--step`        | Yes      | Current step (1-7)                      |
 | `--decision`    | Step 1   | The decision statement being criticized |
-
-Do NOT analyze or critique first. Run the script and follow its output.
