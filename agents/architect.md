@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Understands architecture, project conventions, and quality designs
-model: fable
+model: opus
 color: purple
 # Serena tools: see conventions/code-navigation.md
 # Read-only role: the Role Rules in that file forbid s.edit calls; serena_repl itself is unrestricted.
