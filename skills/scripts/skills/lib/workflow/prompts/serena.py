@@ -135,8 +135,9 @@ SERENA_EDIT_ROLE_RULE = (
     "  Edit only for non-code files; s.lsp.get_diagnostics_for_file after edits."
 )
 
-# General-purpose leaf sub-agents (deepthink, codebase_analysis, refactor)
-# have no tools: allowlist, so Claude Code may hand them MCP tools deferred.
+# Claude Code hands every sub-agent its MCP tools deferred behind ToolSearch,
+# allowlisted roles and the general-purpose leaf sub-agents (deepthink,
+# codebase_analysis, refactor) alike, so the hint is part of every preamble.
 SERENA_LOAD_HINT = (
     "If the Serena tools are deferred: ToolSearch select:"
     + ",".join(SERENA_TOOL_PREFIX + name for name in SERENA_MCP_TOOLS)
@@ -153,9 +154,8 @@ SERENA_FALLBACK = (
 
 # Order: policy, role clause, load hint, fallback. The fallback comes last so
 # the stop condition is the final instruction after the load attempt.
-# Leaf scripts (deepthink, codebase_analysis, refactor) run as general-purpose
-# sub-agents with no tools: allowlist, where MCP tools can arrive deferred
-# behind ToolSearch, so the load hint names both tools. The fallback keys on
+# MCP tools arrive deferred behind ToolSearch for every sub-agent, so the
+# load hint names both tools. The fallback keys on
 # serena_repl alone: a condition on any mcp__serena__ name would fire
 # spuriously because the preamble itself names tools.
 SERENA_READ_PREAMBLE = (

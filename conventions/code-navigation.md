@@ -149,11 +149,12 @@ session id and of Serena's manual, and it writes nothing. The two names are
 listed explicitly rather than as a wildcard; a wildcard adds nothing when
 only two tools exist.
 
-`ToolSearch` stays in every list. ToolSearch is assumed to load a Serena tool that arrives deferred
-(unverified: allowlisted MCP tools have only been observed pre-loaded,
-never deferred, so this path is untested). The load hint
-(`ToolSearch select:` both names) cannot run without it. The Fallback
-stops the agent after that single call, so the hint cannot become a loop.
+`ToolSearch` stays in every list because allowlisted MCP tools reach a
+sub-agent deferred, not pre-loaded: on its first turn a sub-agent sees
+neither Serena tool and needs one `ToolSearch select:` call to load both.
+The load hint (`ToolSearch select:` both names) cannot run without it. The
+Fallback stops the agent after that single call, so the hint cannot become
+a loop.
 
 | Role              | Host tools beyond the common set | Rationale |
 | ----------------- | -------------------------------- | --------- |
@@ -210,4 +211,6 @@ and no Serena import, neither of which CI provides.
 `s.<facade>.<method>` name here and checks it against those tuples in both
 directions, and checks that the only `mcp__serena__` names in any `.md`,
 `.py`, `.yml`, `.yaml` or `.json` file under the repo root are the two in
-`SERENA_MCP_TOOLS`.
+`SERENA_MCP_TOOLS`. The scan skips `.git`, `__pycache__` and `projects/`,
+the untracked runtime directory Claude Code keeps in a live checkout, whose
+session notes may name retired tools.

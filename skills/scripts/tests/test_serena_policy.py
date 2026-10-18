@@ -17,8 +17,9 @@ get_diagnostics_for_symbol, restart_language_server) are unavailable.
 Names in prose are extracted as s.<facade>.<method> because that is how
 Serena's manual names them and one regex needs no YAML parser or Serena
 import. The mcp__serena__ scan walks the whole repo root and skips only
-.git and __pycache__, so every output style and workflow under the root
-is scanned.
+.git, __pycache__ and projects/ (the untracked runtime directory Claude
+Code keeps in a live checkout, whose session notes may name retired
+tools), so every output style and workflow under the root is scanned.
 
 Frontmatter parsing uses a hand-rolled scanner rather than a YAML parser
 because the suite runs with only pytest and hypothesis installed. The
@@ -140,9 +141,11 @@ SKILLS_DIR = REPO_ROOT / "skills" / "scripts" / "skills"
 CONVENTION_FILE = CONVENTIONS_DIR / "code-navigation.md"
 
 SCAN_SUFFIXES = (".md", ".py", ".yml", ".yaml", ".json")
-# Only these two are pruned: skipping every dot-prefixed directory would
-# exclude .github/ from the scan.
-SCAN_PRUNED_DIRS = (".git", "__pycache__")
+# Only these three are pruned: skipping every dot-prefixed directory would
+# exclude .github/ from the scan. projects/ is the untracked runtime
+# directory Claude Code keeps in a live checkout; its session notes may
+# legitimately name retired tools.
+SCAN_PRUNED_DIRS = (".git", "__pycache__", "projects")
 
 
 def parse_agent_tools(path: Path) -> list[str]:
