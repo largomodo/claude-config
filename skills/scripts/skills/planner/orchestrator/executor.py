@@ -116,6 +116,67 @@ def _reconciliation_actions() -> list[str]:
         "are independent.",
     ]
 
+# An existing plan.json in the state directory wins so a frozen plan is never overwritten by a stale copy.
+def _resolve_state_actions(state_dir: str, plan_file: str | None) -> list[str]:
+    """STATE lines for step 1: reuse, copy from a resolved source, or manual.
+
+    WHY: a fresh session holds only the delivered plan.md; without resolution
+    the orchestrator searches /tmp/planner-* by hand.
+
+    context.json is optional: execution runs from plan.json, and context.json
+    only supplements the QR agents, so its absence yields a notice instead of
+    blocking step 1.
+    """
+    from pathlib import Path
+    from skills.planner.shared.provenance import resolve_plan_state
+
+    if (Path(state_dir) / "plan.json").exists():
+        return ["STATE: reusing plan.json in STATE_DIR"]
+
+    manual = [
+        "STATE: copy the plan's plan.json and context.json into STATE_DIR",
+        "before step 2 (QR verify agents read both).",
+    ]
+    if not plan_file:
+        return manual
+
+    res = resolve_plan_state(Path(plan_file))
+    if res.source == "none":
+        return [
+            f"STATE: could not resolve plan.json for {plan_file}:",
+            "  no <stem>.plan.json sidecar, and the plan.md header is absent or",
+            "  points to a directory that no longer exists.",
+            *manual,
+        ]
+
+    return _copy_resolved_state(res, state_dir, manual)
+
+
+def _copy_resolved_state(res, state_dir: str, manual: list[str]) -> list[str]:
+    """Copy a resolved plan.json (and optional context.json) into state_dir, then validate."""
+    import shutil
+    from pathlib import Path
+    from skills.planner.shared.schema import validate_state, SchemaValidationError
+
+    lines = [f"STATE: source={res.source}; copied {res.plan_json} -> {state_dir}/plan.json"]
+    try:
+        # mkdir: a stale --state-dir (e.g. a /tmp path removed by reboot) must
+        # yield a STATE line, not a traceback.
+        Path(state_dir).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(res.plan_json, Path(state_dir) / "plan.json")
+        if res.context_json:
+            shutil.copy2(res.context_json, Path(state_dir) / "context.json")
+            lines.append(f"  copied {res.context_json} -> {state_dir}/context.json")
+        else:
+            lines.append("  context.json not found; QR agents run from plan.json alone.")
+    except OSError as e:
+        return [f"STATE: copy into {state_dir} failed: {e}", *manual]
+    try:
+        validate_state(state_dir)
+    except SchemaValidationError as e:
+        lines.append(f"  Schema validation failed: {e}")
+    return lines
+
 
 def exec_init_step(title):
     """Step 1: wave analysis; creates state_dir when not provided.
@@ -130,16 +191,12 @@ def exec_init_step(title):
         if not state_dir:
             state_dir = tempfile.mkdtemp(prefix="executor-")
             print(f"STATE_DIR={state_dir}")
+        plan_file = ctx.get("plan_file")
 
         actions = [
-            "Plan file: $PLAN_FILE (substitute from context)",
+            f"Plan file: {plan_file or '$PLAN_FILE (substitute from context)'}",
             "",
-            "STATE: Ensure STATE_DIR holds plan.json (approved plan) and",
-            "context.json (planning context). QR verify agents read both.",
-            "  - Executing right after planning: pass the planner's STATE_DIR",
-            "    (both files already present).",
-            "  - Fresh session from a plan file: copy the plan's plan.json and",
-            "    context.json into STATE_DIR before step 2.",
+            *_resolve_state_actions(state_dir, plan_file),
             "",
             "ANALYZE plan:",
             "  - Count milestones and parse dependency diagram",
@@ -306,7 +363,8 @@ STEPS = {
 validate_step_count(STEPS, EXECUTOR_TOTAL_STEPS, "executor")
 
 
-def get_step_guidance(step: int, qr_status, state_dir, reconciliation_check=False) -> dict | str:
+def get_step_guidance(step: int, qr_status, state_dir, reconciliation_check=False,
+                      plan_file=None) -> dict | str:
     """Returns guidance for a step.
 
     Iteration and fix mode derived from qr-{phase}.json file state.
@@ -333,15 +391,18 @@ def get_step_guidance(step: int, qr_status, state_dir, reconciliation_check=Fals
         "qr": qr,
         "state_dir": state_dir,
         "reconciliation_check": reconciliation_check,
+        "plan_file": plan_file,
     }
 
     return handler(ctx)
 
 
-def format_output(step: int, qr_status, state_dir, reconciliation_check=False) -> str | GateResult:
+def format_output(step: int, qr_status, state_dir, reconciliation_check=False,
+                  plan_file=None) -> str | GateResult:
     """Format output for display."""
     guidance = get_step_guidance(step, qr_status, state_dir=state_dir,
-                                 reconciliation_check=reconciliation_check)
+                                 reconciliation_check=reconciliation_check,
+                                 plan_file=plan_file)
 
     if isinstance(guidance, GateResult):
         return guidance
@@ -382,6 +443,8 @@ def main():
                         help="State directory path (holds plan.json and qr-{phase}.json)")
     parser.add_argument("--reconciliation-check", action="store_true",
                         help="Include reconciliation dispatch in step 1 output")
+    parser.add_argument("--plan-file", type=str, default=None,
+                        help="Delivered plan.md; step 1 resolves plan.json/context.json from it")
     add_qr_args(parser)
 
     args = parser.parse_args()
@@ -407,7 +470,8 @@ def main():
         sys.exit(0)
 
     result = format_output(args.step, args.qr_status, state_dir=args.state_dir,
-                           reconciliation_check=args.reconciliation_check)
+                           reconciliation_check=args.reconciliation_check,
+                           plan_file=args.plan_file)
 
     if isinstance(result, GateResult):
         print(result.output)

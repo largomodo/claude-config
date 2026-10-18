@@ -548,9 +548,16 @@ def create_doc_change(ctx: PlanContext, milestone: str, file: str,
 def _translate(ctx: PlanContext, output: str) -> dict:
     """Translate plan.json to Markdown. Internal only -- not exposed via CLI."""
     from .plan import translate_to_markdown
+    from ..shared.provenance import render_provenance
 
     plan = ctx.load_plan()
-    md = translate_to_markdown(plan)
+    created_at = plan.created_at
+    if hasattr(created_at, "isoformat"):
+        created_at = created_at.isoformat()
+    # Only this caller knows the state directory, so it builds the header;
+    # translate_to_markdown stays a pure Plan->str renderer.
+    header = render_provenance(str(ctx.state_dir.resolve()), plan.plan_id, created_at)
+    md = header + "\n" + translate_to_markdown(plan)
     Path(output).write_text(md)
 
     return {"output": output, "operation": "created"}

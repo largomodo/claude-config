@@ -14,6 +14,11 @@ Router (exec_docs.py) dispatches to appropriate script.
 from skills.planner.shared.constraints import format_state_banner
 from skills.lib.conventions import get_convention
 from skills.planner.shared.resources import validate_state_dir_requirement
+from skills.planner.shared.plan_scope import (
+    baseline_commands,
+    format_plan_file_scope,
+    scope_check_commands,
+)
 from skills.planner.shared.qr.utils import (
     load_qr_state,
     format_failed_items_for_fix,
@@ -71,6 +76,11 @@ def get_step_guidance(
                 "CONTEXT PRESERVATION:",
                 "  - Do NOT remove valid documentation",
                 "  - Focus ONLY on addressing the specific failures",
+                "",
+                format_plan_file_scope(state_dir, include_doc_companions=True),
+                "",
+                *baseline_commands(state_dir, "docs"),
+                "  The snapshot must be taken before any edit.",
             ],
             "next": f"python3 -m {MODULE_PATH} --step 2 --state-dir {state_dir}",
         }
@@ -105,6 +115,8 @@ def get_step_guidance(
                 temporal_resource,
                 "",
                 "CONSTRAINT: Fix ONLY the failing items. Don't refactor passing docs.",
+                "SCOPE: edit only paths in PLAN FILE SCOPE, its DOCUMENTATION COMPANIONS,",
+                "or paths named by a finding.",
             ],
             "next": f"python3 -m {MODULE_PATH} --step 3 --state-dir {state_dir}",
         }
@@ -124,6 +136,9 @@ def get_step_guidance(
                 "",
                 "If self-check fails:",
                 "  - Apply additional fixes",
+                "",
+                # docs=True also admits CLAUDE.md and README.md beside scoped files, which documentation fixes legitimately touch.
+                *scope_check_commands(state_dir, "docs", docs=True),
                 "",
                 "If all checks pass:",
                 "  Your complete response must be exactly: PASS",

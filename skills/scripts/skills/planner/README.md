@@ -15,6 +15,8 @@ Python scripts emit workflow prompts and routing. The LLM operates BETWEEN scrip
 
 QR PASS/FAIL is determined by LLM reading QR output, not Python. Gate routing is LLM's decision based on QR outcome. Python scripts provide structure; LLM provides intelligence.
 
+Per-run guidance for sub-agents lives in script text (step output and dispatch prompts), never in ad-hoc prompts the orchestrator writes. Script text is identical on every run and testable; ad-hoc prompts drift between runs.
+
 ## State Files
 
 All state mutations (except initial context.json) happen via Python CLI commands. State directory created via `tempfile.mkdtemp()` in `/tmp`.
@@ -88,17 +90,36 @@ Phases: `qr-plan-design`, `qr-plan-code`, `qr-plan-docs`, `qr-impl-code`, `qr-im
 {
   "schema_version": "1.0",
   "phase": "plan-design",
+  "iteration": 1,
   "items": [
     {
       "id": "qa-001",
       "scope": "*",
       "check": "...",
       "status": "TODO|PASS|FAIL",
-      "finding": null
+      "finding": null,
+      "iteration": 1
     }
   ]
 }
 ```
+
+The file-level `iteration` counts fix cycles. The per-item `iteration` is optional: the file iteration at which `status` was last written.
+
+### QR verdict transitions
+
+Every `update-item` write stamps the item with the file's current iteration. Inside one iteration a verdict moves only toward FAIL:
+
+| From | To   | Result                                         |
+| ---- | ---- | ---------------------------------------------- |
+| TODO | PASS | accepted                                       |
+| TODO | FAIL | accepted                                       |
+| PASS | FAIL | accepted                                       |
+| FAIL | FAIL | accepted                                       |
+| PASS | PASS | no-op                                          |
+| FAIL | PASS | accepted only when item.iteration < file iteration |
+
+PASS stays downgradable because verify dispatch groups a parent with its children and the walkthrough can expose a child defect after the parent was recorded. The downgrade applies to items in the agent's own `--qr-item` list only: parallel verify agents hold disjoint item sets, and rewriting an item another agent owns would race with that agent's recording and break the rule that a verify agent mutates only assigned items. The transition check itself is item-agnostic; the own-list limit is enforced by the verify prompt text. FAIL stays sticky so a verify agent cannot soften a verdict it already wrote. An item without a stamp counts as recorded in the current iteration: treating it as older would allow FAIL->PASS with no fix cycle and no further evidence. `increment_qr_iteration` stamps unstamped items with the outgoing iteration, which is lower than the incremented one, so unstamped items release after one increment. A mistaken FAIL cannot be corrected inside its iteration; the cost is one extra fix-and-verify round, accepted because a correction path would also be a softening path. `cli/qr_commands.check_transition` is the single implementation, and `cli/qr.py` converts its error to a CLI exit; two copies of the rule would drift apart.
 
 ## Workflow Phases and Mutations
 
@@ -246,6 +267,10 @@ identical QR block prompts and cannot drift apart.
 
 **No temp directory cleanup**: OS handles /tmp cleanup on reboot.
 
+**Plan handoff**: `plan.md` is a rendering of `plan.json`. The first line of the rendered file is an HTML comment, `<!-- planner-state: state_dir=<v> plan_id=<v> created_at=<v> -->`, with percent-encoded values and an absolute `/tmp` state_dir; it survives a plain file copy and is invisible when rendered. The line may be removed and execution still works through the other stages. The planner's terminal pass prints a DELIVER block naming the plan copy, optional sidecar copies named `<stem>.plan.json` and `<stem>.context.json` beside the delivered plan, and the executor `--plan-file` command. The executor resolves state in order: existing `plan.json` in STATE_DIR (never overwritten), sidecars, the provenance `state_dir` when it still holds `plan.json`, then a printed manual instruction. `context.json` is optional at every stage: execution runs from `plan.json`, and `context.json` only supplements the QR agents, so a missing one produces a notice instead of blocking. Plans rendered without the header take the manual path.
+
+**Fix-mode file scope**: Fix-mode scripts print a PLAN FILE SCOPE block: per milestone, the union of `files`, `code_intents[].file` and `code_changes[].file`, as repo-root-relative paths (documentation companions included for the technical writer). The union is wider than `Milestone.files` alone because a milestone's file list can omit a path its intents or changes name, and a list that is visibly too narrow gets ignored; the union is still bounded by the plan, since it holds only paths the plan mentions. The fix agent, not the script, saves `git status --porcelain -uall` from the target repository root before editing and again before returning. Two snapshots keep uncommitted work that existed before the fix from being reverted: `python3 -m skills.planner.shared.plan_scope` classifies only paths absent from the baseline, and the agent reverts out-of-scope paths that appear only in the second snapshot unless a finding names them. The scripts run from the install directory, which usually belongs to a different repository than the plan's target, so the agent names the root (target-root rule) and a wrong root yields a notice, not a revert.
+
 ## Invariants
 
 1. Every skill entry point defines exactly ONE Workflow
@@ -257,3 +282,6 @@ identical QR block prompts and cannot drift apart.
 7. Wave coordination assumes sub-agents can spawn sub-agents (Claude Code
    v2.1.172+): executor step 2 dispatches one developer that coordinates
    parallel Task(developer) calls per wave
+8. The first line of a verify agent's final response is exactly PASS or FAIL; the orchestrator tallies that line. After FAIL, the script-rendered `<id> [<severity>]: <finding>` lines (one per failing item) tell the orchestrator why. An item left TODO yields UNRECORDED record-and-rerun instructions instead of any verdict block; they print outside the BEGIN/END RESPONSE markers and do not reach the orchestrator.
+9. Decompose agents run every step until `qr-{phase}.json` exists; the dispatch prompt and the decompose step 1 text both state this, quoting the step counts from `shared/constants.py`.
+10. Verify walkthrough order per group: children before parents, umbrella (scope `*`) last. A parent whose `parent_id` lies outside the group counts as a child.

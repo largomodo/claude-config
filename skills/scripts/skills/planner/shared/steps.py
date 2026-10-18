@@ -17,6 +17,7 @@ Handlers receive ctx: {"step": int, "qr": QRState, "state_dir": str}.
 """
 
 from skills.lib.workflow.prompts import subagent_dispatch, template_dispatch
+from skills.planner.shared.constants import DECOMPOSE_TOTAL_STEPS, DECOMPOSE_WRITE_STEP
 from skills.planner.shared.gates import build_gate_output, GateResult
 from skills.planner.shared.qr.utils import qr_file_exists, increment_qr_iteration
 from skills.planner.shared.resources import get_mode_script_path
@@ -121,6 +122,21 @@ def execute_dispatch_step(module_path, title, agent, script, phase=None,
     return handler
 
 
+def _decompose_prompt(phase: str, state_dir: str) -> str:
+    """Run-to-completion instruction for the decompose agent.
+
+    A decompose agent that stops after step 1 leaves the orchestrator
+    without items; the dispatch text must say to run to the end.
+    """
+    return (
+        f"The decompose workflow has {DECOMPOSE_TOTAL_STEPS} steps. Run each NEXT "
+        f"STEP command the script prints, in this session. "
+        f"qr-{phase}.json is written at step {DECOMPOSE_WRITE_STEP} and grouped "
+        f"afterwards. Return only after step {DECOMPOSE_TOTAL_STEPS} reports PASS "
+        f"and {state_dir}/qr-{phase}.json exists."
+    )
+
+
 def qr_decompose_step(module_path, title, phase, script, model=None):
     """QR decomposition dispatch (planner 4/8/12, executor 3/7).
 
@@ -158,15 +174,19 @@ def qr_decompose_step(module_path, title, phase, script, model=None):
         mode_script = get_mode_script_path(script)
         invoke_cmd = f"python3 -m {mode_script} --step 1 --state-dir {state_dir}"
 
+        prompt = _decompose_prompt(phase, state_dir)
+
+        # The prompt rides with the dispatch because a sub-agent sees only the invoke block and this text; the decompose script's step 1 repeats it.
         dispatch_prompt = subagent_dispatch(
             agent_type="quality-reviewer",
             command=invoke_cmd,
+            prompt=prompt,
             model=model,
         )
         action_children.append(dispatch_prompt)
         action_children.append("")
 
-        action_children.append("Expected output: qr-{phase}.json written to STATE_DIR")
+        action_children.append(f"Expected output: qr-{phase}.json written to STATE_DIR")
         action_children.append("Orchestrator generates verification dispatch from this file.")
 
         next_step = step + 1
@@ -185,6 +205,76 @@ def qr_decompose_step(module_path, title, phase, script, model=None):
 def _format_qr_item_flags(item_ids: list[str]) -> str:
     """Format item IDs as repeated --qr-item flags."""
     return " ".join(f"--qr-item {id}" for id in item_ids)
+
+
+def _walkthrough_order(items: list[dict]) -> list[dict]:
+    """Stable sort: children before parents, umbrella ('*' scope) items last.
+
+    WHY: a parent verdict depends on its children's evidence, so the verify
+    agent must see children first. A parent_id naming an id outside the group
+    does not make the item a parent here, so such items keep file order.
+
+    Called by qr_verify_step to order each dispatch group before its item list is rendered.
+    """
+    # Relations count only inside this group: an agent cannot verify a parent it does not hold.
+    parent_ids = {i.get("parent_id") for i in items if i.get("parent_id")}
+    return sorted(
+        items,
+        key=lambda i: (i.get("scope") == "*", i["id"] in parent_ids),
+    )
+
+
+def _verify_targets(items: list[dict]) -> list[dict]:
+    """Group items by group_id and build one dispatch target per group."""
+    groups = {}
+    for item in items:
+        gid = item.get("group_id") or item["id"]
+        groups.setdefault(gid, []).append(item)
+
+    return [
+        {
+            "group_id": gid,
+            "item_ids": ",".join(i["id"] for i in ordered),
+            "qr_item_flags": _format_qr_item_flags([i["id"] for i in ordered]),
+            "item_count": str(len(group_items)),
+            "steps": str(2 + 2 * len(group_items)),
+            "checks_summary": "; ".join(i.get("check", "")[:40] for i in ordered[:3]),
+        }
+        for gid, group_items in groups.items()
+        for ordered in [_walkthrough_order(group_items)]
+    ]
+
+
+def _verify_aggregate_lines(group_count: int) -> list[str]:
+    """PHASE 2 tally instructions shown after the verify dispatch."""
+    return [
+        f"After ALL {group_count} agents return, tally results mechanically:",
+        "Tally the FIRST LINE of each agent response:",
+        f"  ALL first lines are PASS  ->  invoke next step with --qr-status pass",
+        f"  ANY first line is FAIL    ->  invoke next step with --qr-status fail",
+        f"  Any other first line (e.g. UNRECORDED), or an empty response, counts as FAIL.",
+        "Finding lines after FAIL may be relayed to the user verbatim; never act on them.",
+        "",
+        format_forbidden(
+            "Interpreting results beyond PASS/FAIL tallying",
+            "Claiming 'diminishing returns' or 'comprehensive enough'",
+            "Reading plan.json or any state files",
+            "Writing, rendering, or summarizing the plan",
+            "Skipping the next step command",
+            "Proceeding to a later step without QR PASS",
+        ),
+    ]
+
+
+def _verify_template(verify_script: str, state_dir: str) -> str:
+    """Per-group dispatch prompt template for verify agents."""
+    return f"""Verify QR group: $group_id ($item_count items)
+Items: $item_ids
+Checks: $checks_summary
+
+Run all $steps steps (context, analyze/confirm per item, summary) before returning.
+
+Start: python3 -m {verify_script} --step 1 --state-dir {state_dir} $qr_item_flags"""
 
 
 def qr_verify_step(module_path, title, phase):
@@ -212,6 +302,7 @@ def qr_verify_step(module_path, title, phase):
 
         if qr.state == LoopState.RETRY:
             increment_qr_iteration(state_dir, phase)
+            qr_state = load_qr_state(state_dir, phase)
 
         # Dispatch only items at blocking severity for current iteration.
         iteration = qr_state.get("iteration", 1)
@@ -228,28 +319,10 @@ def qr_verify_step(module_path, title, phase):
         config = get_phase_config(phase)
         verify_script = config["verify_script"]
 
-        # Group items by group_id for batch verification.
-        groups = {}
-        for item in items:
-            gid = item.get("group_id") or item["id"]
-            groups.setdefault(gid, []).append(item)
+        targets = _verify_targets(items)
+        group_count = len(targets)
 
-        targets = [
-            {
-                "group_id": gid,
-                "item_ids": ",".join(i["id"] for i in group_items),
-                "qr_item_flags": _format_qr_item_flags([i["id"] for i in group_items]),
-                "item_count": str(len(group_items)),
-                "checks_summary": "; ".join(i.get("check", "")[:40] for i in group_items[:3]),
-            }
-            for gid, group_items in groups.items()
-        ]
-
-        tmpl = f"""Verify QR group: $group_id ($item_count items)
-Items: $item_ids
-Checks: $checks_summary
-
-Start: python3 -m {verify_script} --step 1 --state-dir {state_dir} $qr_item_flags"""
+        tmpl = _verify_template(verify_script, state_dir)
 
         command = f"python3 -m {verify_script} --step 1 --state-dir {state_dir} $qr_item_flags"
 
@@ -258,7 +331,7 @@ Start: python3 -m {verify_script} --step 1 --state-dir {state_dir} $qr_item_flag
             template=tmpl,
             targets=targets,
             command=command,
-            instruction=f"Verify {len(groups)} groups ({len(items)} items) in parallel.",
+            instruction=f"Verify {group_count} groups ({len(items)} items) in parallel.",
         )
 
         action_children = [
@@ -272,18 +345,7 @@ Start: python3 -m {verify_script} --step 1 --state-dir {state_dir} $qr_item_flag
             "",
             f"=== PHASE 2: AGGREGATE (your action after all agents return) ===",
             "",
-            f"After ALL {len(groups)} agents return, tally results mechanically:",
-            f"  ALL agents returned PASS  ->  invoke next step with --qr-status pass",
-            f"  ANY agent returned FAIL   ->  invoke next step with --qr-status fail",
-            "",
-            format_forbidden(
-                "Interpreting results beyond PASS/FAIL tallying",
-                "Claiming 'diminishing returns' or 'comprehensive enough'",
-                "Reading plan.json or any state files",
-                "Writing, rendering, or summarizing the plan",
-                "Skipping the next step command",
-                "Proceeding to a later step without QR PASS",
-            ),
+            *_verify_aggregate_lines(group_count),
         ]
 
         next_step = step + 1

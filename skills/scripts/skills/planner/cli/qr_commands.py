@@ -13,9 +13,49 @@ from pathlib import Path
 
 
 VALID_STATUSES = frozenset({"PASS", "FAIL"})
-TERMINAL_STATUSES = frozenset({"PASS"})
+# A FAIL must carry a finding and a PASS must not, so a failure always explains itself and a pass never keeps a stale reason.
 REQUIRES_FINDING = frozenset({"FAIL"})
 FORBIDS_FINDING = frozenset({"PASS"})
+
+# Verdict rule: within one iteration a verdict only moves toward FAIL.
+#   always accepted: TODO->PASS, TODO->FAIL, PASS->FAIL, FAIL->FAIL, PASS->PASS (no-op)
+#   accepted only in a later iteration than the stamp: FAIL->PASS
+# A verify agent that recorded PASS early must be able to correct it when a
+# later item in its walkthrough exposes a defect; a FAIL must not be softened
+# without a fix cycle (new iteration) in between.
+# The downgrade is for items in the agent's own --qr-item list only: parallel
+# verify agents hold disjoint item sets, and rewriting another agent's item
+# would race with that agent's recording. The prompt text in
+# qr_verify_base.py enforces the list; this function checks the transition only.
+# An item with no stamp counts as the current iteration: an unstamped FAIL may
+# have been written in this iteration, and treating it as older would allow a
+# FAIL->PASS with no fix cycle in between. increment_qr_iteration stamps such
+# items, so they become releasable after exactly one increment.
+BLOCKED_UPGRADE_FROM = "FAIL"
+BLOCKED_UPGRADE_TO = "PASS"
+
+
+def check_transition(current_status: str, new_status: str,
+                     item_iteration: int | None,
+                     current_iteration: int) -> None:
+    """Raise ValueError when the verdict change is a same-iteration upgrade.
+
+    Only FAIL->PASS is ever refused, and only when the FAIL was written in the
+    current iteration (stamp missing or >= current_iteration).
+
+    Called by qr_commands.update_item and, through it, by the cli/qr.py
+    update-item command, before any status write. One implementation serves both
+    entry points: two copies of the rule would drift, and the stricter one would
+    silently decide which verdicts agents can record.
+    """
+    if current_status != BLOCKED_UPGRADE_FROM or new_status != BLOCKED_UPGRADE_TO:
+        return
+    if item_iteration is None or item_iteration >= current_iteration:
+        raise ValueError(
+            f"Cannot change FAIL to PASS within iteration {current_iteration}: "
+            f"a FAIL verdict is released only after a fix cycle starts a new "
+            f"iteration. PASS->FAIL is accepted at any time."
+        )
 
 
 @dataclass
@@ -63,9 +103,8 @@ def _find_item(qr_state: dict, item_id: str) -> tuple[int, dict | None]:
     return -1, None
 
 
-def update_item(ctx: QRContext, item_id: str, status: str,
-                finding: str = None) -> dict:
-    """Update QR item status with file locking."""
+def _validate_update(status: str, finding: str | None) -> str:
+    """Normalize status and enforce the finding rules; returns upper-cased status."""
     status = status.upper()
 
     if status not in VALID_STATUSES:
@@ -76,6 +115,14 @@ def update_item(ctx: QRContext, item_id: str, status: str,
 
     if status in FORBIDS_FINDING and finding:
         raise ValueError(f"Status {status} forbids finding. PASS means no issues found.")
+
+    return status
+
+
+def update_item(ctx: QRContext, item_id: str, status: str,
+                finding: str = None, severity: str = None) -> dict:
+    """Update QR item status with file locking."""
+    status = _validate_update(status, finding)
 
     qr_path = ctx.qr_path()
     if not qr_path.exists():
@@ -91,18 +138,24 @@ def update_item(ctx: QRContext, item_id: str, status: str,
             raise ValueError(f"Item {item_id} not found in qr-{ctx.phase}.json")
 
         current_status = item.get("status", "TODO")
-        if current_status in TERMINAL_STATUSES:
-            raise ValueError(
-                f"Item {item_id} has terminal status {current_status}. "
-                f"Cannot transition to {status}."
-            )
+        # Re-recording an identical PASS is a no-op below, so agents that confirm twice do not bump versions.
+        current_iteration = qr_state.get("iteration", 1)
+        check_transition(current_status, status, item.get("iteration"),
+                         current_iteration)
+
+        if current_status == "PASS" and status == "PASS":
+            return {"id": item_id, "version": item.get("version", 1),
+                    "operation": "unchanged"}
 
         item["version"] = item.get("version", 1) + 1
         item["status"] = status
+        item["iteration"] = current_iteration
         if finding:
             item["finding"] = finding
         elif "finding" in item and status == "PASS":
             del item["finding"]
+        if severity:
+            item["severity"] = severity
 
         qr_state["items"][idx] = item
         _save_qr_state_atomic(ctx, qr_state)

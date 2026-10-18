@@ -26,13 +26,13 @@ QR gates now integrate with QA state tracking for structured verification. QA de
 
 **Minimal State Files**: Store ONLY authoritative data -- item statuses (TODO/PASS/FAIL). Sub-agents compute status overview on-demand when THEY need it. No derived values stored.
 
-**Dumb Main Agent**: Main agent dispatches and routes. It needs ONE bit: PASS or FAIL. The LLM reads responses naturally and follows instructions. No parsing logic required in main agent.
+**Dumb Main Agent**: Main agent dispatches and routes. It needs one decision input: the first line of each verify response, exactly PASS or FAIL, plus the script-rendered finding lines after FAIL. The LLM reads responses naturally and follows instructions. No parsing logic required in main agent.
 
 **Just-In-Time Prompting**: Executor sub-agent (fixer) invokes script and sees prompts about what failed. Main agent never sees these details. Details are injected only when needed, only to the agent that needs them.
 
 ### Why Main Agent Doesn't Parse
 
-The LLM reads sub-agent responses and follows instructions naturally. No JSON parsing, no status extraction logic. Sub-agents return text responses with embedded instructions like "PASS: continue to next phase" or "FAIL: invoke fixer with items [...]". Main agent reads and follows.
+The LLM reads sub-agent responses and follows instructions naturally. No JSON parsing, no status extraction logic. Verify agents return the script-rendered verdict block: line 1 is exactly PASS or FAIL, followed after FAIL by `<id> [<severity>]: <finding>` lines. The main agent tallies the first line and relays the failure lines to the fixer.
 
 This eliminates an entire class of bugs: parsing errors, schema mismatches, JSON escaping issues. The LLM's natural language understanding handles all response interpretation.
 
@@ -61,27 +61,18 @@ NEXT: Invoke verifiers for each item.
 **VERIFY Mode**: Returns PASS/FAIL verdict.
 
 ```
-VERIFICATION COMPLETE
-
-Status: PASS
-Items: 7 total, 7 PASS, 0 FAIL
-
-NEXT: Continue to next phase.
+PASS
 ```
 
 or
 
 ```
-VERIFICATION COMPLETE
-
-Status: FAIL
-Items: 7 total, 5 PASS, 2 FAIL
-Failed items:
-- plan-002: Acceptance criteria missing for M1
-- plan-005: Diff has merge conflict markers
-
-NEXT: Invoke fixer with failed items.
+FAIL
+plan-002 [MUST]: Acceptance criteria missing for M1
+plan-005 [SHOULD]: Diff has merge conflict markers
 ```
+
+Line 1 is exactly `PASS` or `FAIL`; the orchestrator counts the first line only. See Verdict Recording and Summary.
 
 **FIX_GUIDANCE Mode**: Returns specific instructions for fixing failures.
 
@@ -179,7 +170,7 @@ Main agent reads response, sees "NEXT: Invoke verifiers"
 Main agent invokes verify (macro items sequential, micro parallel)
      |
      v
-Verify sub-agent returns: "Status: FAIL, 2 failed items"
+Verify sub-agent returns: "FAIL" plus one line per failed item
      |
      v
 Step 4: plan-structure-qr-gate
@@ -237,6 +228,12 @@ Status overview computed on-demand. Not stored in qr-{phase}.json. Main agent ne
 **Tooling**: Every editor has JSON validation built-in. JSON Schema validators are ubiquitous.
 
 **LLM-friendly**: Modern LLMs handle JSON natively. ChatML and Claude both have JSON mode. No escaping issues for simple structures like QA items.
+
+### Verdict Recording and Summary
+
+Verify agents record each item with `update-item` at its CONFIRM step. When a later item in the same walkthrough exposes a defect in an item already recorded PASS, the agent re-records that item as FAIL with a finding; this applies to items in the agent's own `--qr-item` list only: parallel verify agents hold disjoint item sets, so each owns the verdicts it was assigned, and rewriting another agent's item would race with that agent's recording. FAIL->PASS is refused inside the iteration that wrote the FAIL, so a verdict cannot be softened without a fix cycle. A mistaken FAIL therefore costs one extra fix-and-verify round; that cost is accepted because a correction path would also soften verdicts.
+
+The SUMMARY step renders the final response from `qr-{phase}.json` for the agent's items. Line 1 is exactly `PASS` or `FAIL`, the contract the orchestrator tally relies on. After FAIL, one line per failing item follows as `<id> [<severity>]: <finding>`: severity defaults to SHOULD when absent, the finding is collapsed to one line and truncated to 300 characters, an empty finding renders as `(no finding recorded)`. The truncation bounds the block length, so many failures cannot flood the orchestrator's context; the full finding stays in the qr file. Items still TODO produce UNRECORDED record-and-rerun instructions instead of a verdict block. The script renders the block because the orchestrator never reads state files; these lines are its only source of the failure reason.
 
 ## QR Iteration Blocking
 

@@ -69,6 +69,21 @@ def get_context_path(state_dir: str) -> Path:
     """
     return Path(state_dir) / "context.json"
 
+
+def render_context_or_notice(context_file: str) -> str:
+    """Render context.json for sub-agents, or a one-line notice when it is absent.
+
+    WHY: a plan resolved from a sidecar or provenance pointer may have no
+    context.json; QR agents then work from plan.json alone instead of failing
+    at step 1.
+
+    Called by the QR verify step-1 instructions to render the context block.
+    """
+    if not Path(context_file).exists():
+        return ("context.json: not found in STATE_DIR; work from plan.json "
+                "and the task description only.")
+    return render_context_file(context_file)
+
 # WHY explicit __all__ update: resources.py uses __all__ (lines 23-32) to enforce
 # public API contract. STATE_DIR_ARG_REQUIRED and get_context_path must be listed
 # because sub-agent scripts import them directly. Implicit exports would work but
@@ -81,6 +96,7 @@ __all__ = [
     "STATE_DIR_ARG_REQUIRED",
     "get_context_path",
     "render_context_file",
+    "render_context_or_notice",
     "PlannerResourceProvider",
     "validate_state_dir_requirement",
 ]

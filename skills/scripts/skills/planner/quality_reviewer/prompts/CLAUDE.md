@@ -6,5 +6,5 @@ Shared prompts and utilities for QR decomposition scripts.
 
 | File           | What                                        | When to read                            |
 | -------------- | ------------------------------------------- | --------------------------------------- |
-| `decompose.py` | Shared utilities for QR decomposition       | Modifying decomposition prompt assembly |
+| `decompose.py` | Shared utilities for QR decomposition; step 1 run-to-completion text | Modifying decomposition prompt assembly |
 | `__init__.py`  | Package exports                             | -                                       |

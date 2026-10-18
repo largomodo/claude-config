@@ -23,6 +23,11 @@ tools.
 
 from skills.planner.shared.constraints import format_state_banner
 from skills.planner.shared.resources import validate_state_dir_requirement
+from skills.planner.shared.plan_scope import (
+    baseline_commands,
+    format_plan_file_scope,
+    scope_check_commands,
+)
 from skills.planner.shared.qr.utils import (
     load_qr_state,
     format_failed_items_for_fix,
@@ -80,6 +85,11 @@ def get_step_guidance(
                 "CONTEXT PRESERVATION:",
                 "  - Do NOT refactor unrelated code",
                 "  - Focus ONLY on addressing the specific failures",
+                "",
+                format_plan_file_scope(state_dir),
+                "",
+                *baseline_commands(state_dir, "code"),
+                "  The snapshot must be taken before any edit.",
             ],
             "next": f"python3 -m {MODULE_PATH} --step 2 --state-dir {state_dir}",
         }
@@ -106,6 +116,8 @@ def get_step_guidance(
                 "  - Add missing error handling",
                 "",
                 "CONSTRAINT: Fix ONLY the failing items. Don't refactor passing code.",
+                # Repeated at the edit step because the step-1 listing is far from the edits by then.
+                "SCOPE: edit only paths in PLAN FILE SCOPE or paths named by a finding.",
             ],
             "next": f"python3 -m {MODULE_PATH} --step 3 --state-dir {state_dir}",
         }
@@ -128,6 +140,8 @@ def get_step_guidance(
                 "If tests fail or self-check fails:",
                 "  - Apply additional fixes",
                 "  - Re-run tests",
+                "",
+                *scope_check_commands(state_dir, "code", header="SCOPE CHECK (after tests pass):"),
                 "",
                 "If all tests pass:",
                 "  Your complete response must be exactly: PASS",

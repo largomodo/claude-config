@@ -19,11 +19,13 @@ QA_ITEM_DEFAULTS = {
     "parent_id": None,
     "group_id": None,
     "severity": "SHOULD",  # Default for backwards compat with existing qr-{phase}.json files
+    "iteration": None,
 }
 
 # Canonical field names for QR items
+# iteration is optional: an unstamped item is valid and counts as recorded in the current iteration.
 QA_ITEM_REQUIRED_FIELDS = frozenset({"id", "scope", "check", "status", "version"})
-QA_ITEM_OPTIONAL_FIELDS = frozenset({"finding", "parent_id", "group_id", "severity"})
+QA_ITEM_OPTIONAL_FIELDS = frozenset({"finding", "parent_id", "group_id", "severity", "iteration"})
 QA_ITEM_ALL_FIELDS = QA_ITEM_REQUIRED_FIELDS | QA_ITEM_OPTIONAL_FIELDS
 
 # Valid severity values (per conventions/severity.md)
@@ -401,6 +403,11 @@ if PYDANTIC_AVAILABLE:
         parent_id: str | None = None
         group_id: str | None = None
         severity: Literal["MUST", "SHOULD", "COULD"] = "SHOULD"
+        # qr file iteration at which status was last written. None means unstamped:
+        # the item counts as the current iteration until increment_qr_iteration
+        # stamps it. Counting it as older would let a FAIL become PASS without a
+        # fix cycle in between.
+        iteration: int | None = None
 
     class QRFile(BaseModel):
         """qr-{phase}.json file structure."""
@@ -413,14 +420,17 @@ if PYDANTIC_AVAILABLE:
 # QR Schema Helpers (moved from shared/qr/schema.py)
 # =============================================================================
 
-QA_ITEM_SCHEMA_TEMPLATE = '''{
+# Outer braces are doubled because get_qa_state_schema_example renders this
+# template with str.format; only {id_example} is a placeholder.
+QA_ITEM_SCHEMA_TEMPLATE = '''{{
   "id": "{id_example}",
   "scope": "*" or "file:path:lines",
   "check": "Description of what was checked",
   "status": "TODO",
   "version": 1,
-  "finding": null
-}'''
+  "finding": null,
+  "iteration": null
+}}'''
 
 
 def get_qa_state_schema_example(phase: str, id_prefix: str = "qa") -> str:

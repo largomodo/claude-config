@@ -31,6 +31,14 @@ QR_PLAN_DOCS_TOTAL_STEPS = 6
 QR_IMPL_CODE_TOTAL_STEPS = 5
 QR_IMPL_DOCS_TOTAL_STEPS = 4
 
+# Decompose workflow facts quoted to agents. Dispatch prompts (shared/steps.py)
+# and the decompose script (quality_reviewer/prompts/decompose.py) both tell the
+# agent how many steps to run and when qr-{phase}.json is written; one source
+# keeps them equal. test_qr_verify_routing.py pins the values to the workflow.
+DECOMPOSE_TOTAL_STEPS = 13
+DECOMPOSE_WRITE_STEP = 8
+# Steps after the write step group the written items; an agent that stops earlier leaves them ungrouped.
+
 
 def validate_step_count(steps_dict: dict, expected_total: int, workflow_name: str) -> None:
     """Validate that STEPS dict matches expected total.

@@ -26,8 +26,9 @@ Called via: python3 -m {module_path} --step N --state-dir {dir}
 import json
 from pathlib import Path
 
+from skills.planner.shared.constants import DECOMPOSE_TOTAL_STEPS, DECOMPOSE_WRITE_STEP
 from skills.planner.shared.qr.utils import load_qr_state
-from skills.planner.shared.resources import get_context_path, render_context_file
+from skills.planner.shared.resources import get_context_path, render_context_or_notice
 
 
 # =============================================================================
@@ -186,7 +187,7 @@ def dispatch_step(
     this function handles the common routing logic.
 
     Args:
-        step: Current step number (1-13)
+        step: Current step number (1 to DECOMPOSE_TOTAL_STEPS)
         phase: Phase name (plan-docs, plan-code, etc.)
         module_path: Module path for next step command
         phase_prompts: Dict mapping step numbers to phase-specific prompt strings
@@ -202,11 +203,17 @@ def dispatch_step(
 
     # Step 1: Absorb context (phase-specific)
     if step == 1:
-        context_display = render_context_file(get_context_path(state_dir)) if state_dir else ""
+        context_display = render_context_or_notice(get_context_path(state_dir)) if state_dir else ""
         return {
             "title": f"QR Decomposition Step 1: Absorb Context ({phase})",
             "actions": [
                 f"PHASE: {phase}",
+                "",
+                f"WORKFLOW: {DECOMPOSE_TOTAL_STEPS} steps in this session. Each step prints the",
+                "next command; run it. "
+                f"qr-{phase}.json is written at step {DECOMPOSE_WRITE_STEP} and grouped in the",
+                "following steps; stopping before the last step leaves the orchestrator",
+                "without items.",
                 "",
                 phase_prompts[1],
                 "",
@@ -313,9 +320,10 @@ def dispatch_step(
         }
 
     # Step 8: Finalize (shared with phase substitution)
-    elif step == 8:
+    # Keyed to the constant quoted in step 1 so the stated write step and the real one cannot diverge.
+    elif step == DECOMPOSE_WRITE_STEP:
         return {
-            "title": f"QR Decomposition Step 8: Finalize ({phase})",
+            "title": f"QR Decomposition Step {DECOMPOSE_WRITE_STEP}: Finalize ({phase})",
             "actions": [FINALIZE_PROMPT.format(phase=phase)],
             "next": next_cmd(9),
         }
@@ -335,7 +343,7 @@ def dispatch_step(
         )
     elif step == 12:
         return step_12_affinity_grouping(state_dir, phase, module_path)
-    elif step == 13:
+    elif step == DECOMPOSE_TOTAL_STEPS:
         return step_13_final_validation(state_dir, phase, module_path)
 
     return {"error": f"Unknown step {step}"}

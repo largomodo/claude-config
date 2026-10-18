@@ -4,7 +4,16 @@ Tests the dynamic step calculation: total_steps = 1 + (2 * num_items) + 1
 Step 1 is CONTEXT, steps 2..2N+1 alternate ANALYZE/CONFIRM, final step is SUMMARY.
 """
 
+import json
+
 import pytest
+from hypothesis import given, strategies as st
+
+from skills.planner.quality_reviewer.prompts import decompose
+from skills.planner.quality_reviewer.qr_verify_base import VerifyBase, render_verdict_block
+from skills.planner.shared import steps
+from skills.planner.shared.constants import DECOMPOSE_TOTAL_STEPS, DECOMPOSE_WRITE_STEP
+from skills.planner.shared.qr.types import QRState, LoopState
 
 
 def get_step_type(step: int, num_items: int) -> tuple[str, int | None]:
@@ -117,3 +126,190 @@ class TestStepTypeInvariants:
             for step in range(1, total + 1):
                 step_type, _ = get_step_type(step, n)
                 assert step_type in ("CONTEXT", "ANALYZE", "CONFIRM", "SUMMARY")
+
+
+# Minimal concrete VerifyBase: the guidance hook is the only abstract member needed to render confirm and summary steps.
+class _StubVerify(VerifyBase):
+    PHASE = "plan-code"
+
+    def get_verification_guidance(self, item, state_dir):
+        return ["check it"]
+
+
+def _qr(tmp_path, items):
+    (tmp_path / "qr-plan-code.json").write_text(
+        json.dumps({"phase": "plan-code", "iteration": 1, "items": items}))
+
+
+def _item(item_id, status, **extra):
+    return {"id": item_id, "scope": "*", "check": "c", "status": status,
+            "version": 1, **extra}
+
+
+def _summary(tmp_path, ids):
+    return _StubVerify()._step_summary(str(tmp_path), "m", ids, 2 + 2 * len(ids))
+
+
+class TestVerdictBlock:
+    def test_all_pass_is_sole_line(self, tmp_path):
+        _qr(tmp_path, [_item("a", "PASS"), _item("b", "PASS")])
+        assert render_verdict_block(json.loads((tmp_path / "qr-plan-code.json").read_text()),
+                                    ["a", "b"]) == ["PASS"]
+        actions = _summary(tmp_path, ["a", "b"])["actions"]
+        assert "PASS" in actions
+
+    def test_fail_lists_id_severity_finding(self, tmp_path):
+        _qr(tmp_path, [_item("a", "FAIL", severity="MUST", finding="bad thing")])
+        state = json.loads((tmp_path / "qr-plan-code.json").read_text())
+        assert render_verdict_block(state, ["a"]) == ["FAIL", "a [MUST]: bad thing"]
+
+    def test_missing_severity_renders_should(self, tmp_path):
+        state = {"items": [_item("a", "FAIL", finding="x")]}
+        assert render_verdict_block(state, ["a"])[1] == "a [SHOULD]: x"
+
+    def test_multiline_finding_collapsed_and_truncated(self):
+        state = {"items": [_item("a", "FAIL", finding="one\ntwo  three"),
+                           _item("b", "FAIL", finding="x" * 400)]}
+        lines = render_verdict_block(state, ["a", "b"])
+        assert lines[1] == "a [SHOULD]: one two three"
+        assert lines[2].endswith("...") and len(lines[2]) < 330
+
+    def test_fail_outside_item_ids_absent(self):
+        state = {"items": [_item("a", "PASS"), _item("z", "FAIL", finding="x")]}
+        assert render_verdict_block(state, ["a"]) == ["PASS"]
+
+    def test_todo_yields_unrecorded(self, tmp_path):
+        _qr(tmp_path, [_item("a", "PASS"), _item("b", "TODO")])
+        text = "\n".join(_summary(tmp_path, ["a", "b"])["actions"])
+        assert "UNRECORDED" in text and "update-item b" in text
+
+    def test_missing_qr_file_yields_error(self, tmp_path):
+        actions = _summary(tmp_path, ["a"])["actions"]
+        assert actions[0].startswith("ERROR")
+
+
+class TestConfirmText:
+    def test_confirm_has_downgrade_form_and_item_list(self, tmp_path):
+        _qr(tmp_path, [_item("a", "TODO"), _item("b", "TODO")])
+        step = _StubVerify()._step_confirm(str(tmp_path), "m", ["a", "b"], 1, 6)
+        text = "\n".join(step["actions"])
+        assert "update-item <earlier-id> --status FAIL" in text
+        assert "a, b" in text
+        assert "FAIL->PASS is rejected" in text
+
+
+# Decompose/verify dispatch text and walkthrough ordering.
+DISPATCH_PHASE = "plan-code"
+
+
+def _flat(result):
+    out = result.get("actions", [])
+    return "\n".join(str(a) for a in out)
+
+
+def _dispatch_qr_file(tmp_path, items):
+    (tmp_path / f"qr-{DISPATCH_PHASE}.json").write_text(
+        json.dumps({"phase": DISPATCH_PHASE, "iteration": 1, "items": items}))
+
+
+def _dispatch_item(item_id, scope="file:a.py:1", **extra):
+    return {"id": item_id, "scope": scope, "check": "c", "status": "TODO",
+            "version": 1, "severity": "MUST", **extra}
+
+
+def _verify(tmp_path):
+    handler = steps.qr_verify_step("skills.planner.orchestrator.planner", "Verify", DISPATCH_PHASE)
+    qr = QRState(iteration=1, state=LoopState.INITIAL)
+    return handler({"state_dir": str(tmp_path), "step": 5, "qr": qr})
+
+
+def _flags_in_order(text):
+    return [t for t in text.replace("\n", " ").split() if t.startswith("qa-")]
+
+
+def test_decompose_dispatch_names_total_and_output(tmp_path):
+    handler = steps.qr_decompose_step(
+        "skills.planner.orchestrator.planner", "Decompose", DISPATCH_PHASE, "decompose_plan_code")
+    qr = QRState(iteration=1, state=LoopState.INITIAL)
+    text = _flat(handler({"state_dir": str(tmp_path), "step": 4, "qr": qr}))
+    assert str(DECOMPOSE_TOTAL_STEPS) in text
+    assert f"qr-{DISPATCH_PHASE}.json" in text
+
+
+def test_verify_orders_children_before_parent_and_umbrella(tmp_path):
+    _dispatch_qr_file(tmp_path, [
+        _dispatch_item("qa-001", scope="*", group_id="g"),
+        _dispatch_item("qa-002", group_id="g"),
+        _dispatch_item("qa-003", group_id="g", parent_id="qa-002"),
+    ])
+    text = _flat(_verify(tmp_path))
+    assert "Items: qa-003,qa-002,qa-001" in text
+    assert "Run all 8 steps" in text
+
+
+@pytest.mark.parametrize("extra_first,extra_second,expected", [
+    ({"parent_id": "elsewhere"}, {}, "Items: qa-001,qa-002"),
+    ({}, {}, "Items: qa-002,qa-001"),
+])
+def test_file_order_kept_without_in_group_relations(tmp_path, extra_first, extra_second, expected):
+    ids = ("qa-001", "qa-002") if "parent_id" in extra_first else ("qa-002", "qa-001")
+    _dispatch_qr_file(tmp_path, [
+        _dispatch_item(ids[0], group_id="g", **extra_first),
+        _dispatch_item(ids[1], group_id="g", **extra_second),
+    ])
+    assert expected in _flat(_verify(tmp_path))
+
+
+@given(st.permutations(["a", "b", "c", "d"]), st.sampled_from(["a", "b", "c", "d"]),
+       st.sampled_from(["a", "b", "c", "d"]))
+def test_walkthrough_order_contract(order, umbrella, parent):
+    items = [{"id": i, "scope": "*" if i == umbrella else "file:x:1"} for i in order]
+    if parent != umbrella:
+        for it in items:
+            if it["id"] != parent and it["id"] != umbrella:
+                it["parent_id"] = parent
+    result = [i["id"] for i in steps._walkthrough_order(items)]
+    assert sorted(result) == sorted(order)
+    assert result[-1] == umbrella
+    non_umbrella = [i for i in result if i != umbrella]
+    children = [i["id"] for i in items if i.get("parent_id") == parent]
+    if children and parent != umbrella:
+        assert non_umbrella.index(parent) > max(non_umbrella.index(c) for c in children)
+
+
+def test_aggregate_tallies_first_line(tmp_path):
+    _dispatch_qr_file(tmp_path, [_dispatch_item("qa-001", group_id="g")])
+    assert "first line" in _flat(_verify(tmp_path)).lower()
+
+
+def test_decompose_script_states_workflow(tmp_path):
+    (tmp_path / "context.json").write_text("{}")
+    prompts = {1: "p1", 2: "p2", 3: "p3", 5: "p5"}
+    grouping = {"component_examples": "", "concern_examples": ""}
+    text = _flat(decompose.dispatch_step(1, DISPATCH_PHASE, "m", prompts, grouping, str(tmp_path)))
+    assert str(DECOMPOSE_TOTAL_STEPS) in text and str(DECOMPOSE_WRITE_STEP) in text
+
+
+# Pins the constants to the real workflow: adding a decompose step without updating them fails here instead of misleading agents.
+def test_decompose_step_titles_match_constants(tmp_path):
+    _dispatch_qr_file(tmp_path, [_dispatch_item("qa-001")])
+    prompts = {1: "p1", 2: "p2", 3: "p3", 4: "p4", 5: "p5", 6: "p6", 7: "p7"}
+    grouping = {"component_examples": "", "concern_examples": ""}
+    s = str(tmp_path)
+    last = decompose.dispatch_step(DECOMPOSE_TOTAL_STEPS, DISPATCH_PHASE, "m", prompts, grouping, s)
+    write = decompose.dispatch_step(DECOMPOSE_WRITE_STEP, DISPATCH_PHASE, "m", prompts, grouping, s)
+    assert "Final Validation" in last["title"]
+    assert "Finalize" in write["title"]
+
+
+def test_orchestrators_import():
+    import skills.planner.orchestrator.planner  # noqa: F401
+    import skills.planner.orchestrator.executor  # noqa: F401
+
+
+def test_decompose_and_verify_step1_tolerate_missing_context(tmp_path):
+    _dispatch_qr_file(tmp_path, [_dispatch_item("qa-001")])
+    prompts = {1: "p1"}
+    grouping = {"component_examples": "", "concern_examples": ""}
+    text = _flat(decompose.dispatch_step(1, DISPATCH_PHASE, "m", prompts, grouping, str(tmp_path)))
+    assert "context.json: not found" in text

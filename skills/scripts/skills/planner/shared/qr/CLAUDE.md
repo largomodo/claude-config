@@ -10,5 +10,5 @@ QR (Quality Review) domain types and utilities shared across QR scripts.
 | `types.py`     | QR domain types                                  | Modifying QR item/state types         |
 | `constants.py` | QR workflow constants and routing configuration  | Changing QR limits, routing           |
 | `cli.py`       | CLI utilities for QR workflows                   | Modifying QR CLI behavior             |
-| `utils.py`     | State utilities for item verification and fixes  | Debugging item-level QR state         |
+| `utils.py`     | State utilities for item verification and fixes; `increment_qr_iteration` with iteration stamp backfill | Debugging item-level QR state, iteration increments |
 | `__init__.py`  | Package exports                                  | Importing QR types                    |

@@ -11,5 +11,5 @@ Technical writer sub-agent scripts for plan and implementation documentation pha
 | `plan_docs_qr_fix.py`  | Targeted repair after plan-docs QR failures | Modifying plan docs QR fixes     |
 | `exec_docs.py`         | Router: dispatches to execute or fix        | Debugging impl docs routing      |
 | `exec_docs_execute.py` | Post-implementation documentation workflow  | Modifying impl docs steps        |
-| `exec_docs_qr_fix.py`  | Targeted repair after impl-docs QR failures | Modifying impl docs QR fixes     |
+| `exec_docs_qr_fix.py`  | Targeted repair after impl-docs QR failures; shows PLAN FILE SCOPE with documentation companions and the git-status scope check | Modifying impl docs QR fixes, fix-mode scope check |
 | `__init__.py`          | Package marker                              | -                                |

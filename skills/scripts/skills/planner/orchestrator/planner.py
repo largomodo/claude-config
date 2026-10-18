@@ -70,6 +70,32 @@ def _translate_plan(state_dir: str) -> str | None:
         print(f"Warning: plan.md translation failed: {e}", file=sys.stderr)
         return None
 
+
+def format_deliver_instructions(plan_md: str, state_dir: str) -> str:
+    """DELIVER block printed on terminal pass.
+
+    WHY sidecars are optional but recommended: STATE_DIR lives under /tmp and
+    may be gone when execution starts; without sidecars the executor needs the
+    plan.md provenance header to still point at a live directory, otherwise it
+    asks for a manual copy.
+    """
+    return "\n".join([
+        "DELIVER:",
+        f"  1. Copy {plan_md} to the user's requested path (PLAN_FILE).",
+        # Sidecar names derive from the PLAN_FILE stem so several delivered
+        # plans can share a directory without overwriting each other.
+        "  2. Optional, recommended: copy the IR beside it so a later session can execute:",
+        f"       {state_dir}/plan.json    -> <PLAN_FILE stem>.plan.json",
+        f"       {state_dir}/context.json -> <PLAN_FILE stem>.context.json",
+        "     Reason: STATE_DIR is under /tmp and may not survive until execution;",
+        "     without sidecars the executor depends on the plan.md header still",
+        "     pointing at a live directory, else it asks for a manual copy.",
+        "  3. Execute with:",
+        "       python3 -m skills.planner.orchestrator.executor --step 1 --plan-file <PLAN_FILE>",
+        f"     (same session: pass --state-dir {state_dir} instead)",
+    ])
+
+
 _provider = PlannerResourceProvider()
 
 QUESTION_RELAY_INSTRUCTION = SUB_AGENT_QUESTION_FORMAT
@@ -419,7 +445,7 @@ def main():
             plan_path = _translate_plan(args.state_dir)
             if plan_path:
                 print(f"\nPlan rendered to: {plan_path}")
-                print("Copy this file to the user's requested output path.")
+                print(format_deliver_instructions(plan_path, args.state_dir))
     else:
         print(result)
 

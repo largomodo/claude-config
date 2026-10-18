@@ -11,5 +11,5 @@ Developer sub-agent scripts for plan code filling and implementation.
 | `plan_code_qr_fix.py`       | Targeted repair after plan-code QR failures | Modifying plan code QR fixes       |
 | `exec_implement.py`         | Router: dispatches to execute or fix        | Debugging implementation routing   |
 | `exec_implement_execute.py` | Wave-aware implementation workflow          | Modifying implementation steps     |
-| `exec_implement_qr_fix.py`  | Targeted repair after impl-code QR failures | Modifying impl QR fixes            |
+| `exec_implement_qr_fix.py`  | Targeted repair after impl-code QR failures; plan file scope listing, git-status scope check | Modifying impl QR fixes, fix-mode scope check |
 | `__init__.py`               | Package marker                              | -                                  |

@@ -17,13 +17,21 @@ This works by:
 3. Route step number to (CONTEXT, ANALYZE, CONFIRM, SUMMARY)
 4. ANALYZE: explore codebase, form preliminary conclusion
 5. CONFIRM: verify confidence, invoke cli/qr.py to record result
-6. SUMMARY: aggregate pass/fail, output single word
+6. SUMMARY: render the verdict block (first line PASS or FAIL, then one
+   `<id> [<severity>]: <finding>` line per failing item); items still TODO
+   yield UNRECORDED record-and-rerun instructions instead of a block
 
 Invariants:
 - Verify agent mutates only assigned items
 - PASS means check succeeded; no finding
 - FAIL means check failed; finding explains what
 - cli/qr.py handles file locking; script doesn't touch JSON
+- Verdict block: line 1 is exactly PASS or FAIL; finding lines follow FAIL only,
+  collapsed to one line and truncated to FINDING_MAX_CHARS
+- UNRECORDED is printed outside the BEGIN/END RESPONSE markers, so it never
+  reaches the orchestrator
+- Late evidence: PASS->FAIL is accepted for items in the agent's own
+  --qr-item list; FAIL->PASS is rejected within the iteration
 """
 
 from __future__ import annotations
@@ -32,11 +40,54 @@ from abc import ABC, abstractmethod
 
 from skills.planner.shared.qr.phases import get_phase_config
 from skills.planner.shared.qr.utils import load_qr_state, get_qr_item, format_qr_item_for_verification
-from skills.planner.shared.resources import get_context_path, render_context_file
+from skills.planner.shared.resources import get_context_path, render_context_or_notice
+from skills.planner.shared.schema import QA_ITEM_DEFAULTS
 
 
 # CLI module for atomic QR updates
 CLI_MODULE = "skills.planner.cli.qr"
+
+# Bounds each FAIL line so the orchestrator relays one short line per failing item.
+FINDING_MAX_CHARS = 300
+
+# Agents that batch every update-item at the first CONFIRM cannot record a later discovery against an item already marked PASS; this text sets the recording order.
+VERDICT_TIMING_LINES = [
+    "VERDICT TIMING:",
+    "- Record exactly one update-item per CONFIRM step, never ahead of it.",
+    "- Items are listed in walkthrough order (children before parents,",
+    "  umbrella last) because a parent verdict depends on child evidence.",
+    "- A PASS recorded earlier in this walkthrough may be downgraded to FAIL",
+    "  later; a FAIL is never upgraded to PASS within this iteration.",
+]
+
+
+def render_verdict_block(qr_state: dict, item_ids: list[str]) -> list[str]:
+    """Render the agent's final response for the items it was assigned.
+
+    WHY the script renders it: the orchestrator may not read state files, so
+    FAIL details must travel in the agent's response. The first line stays a
+    bare PASS or FAIL so the orchestrator's mechanical tally is unchanged.
+
+    Called by VerifyBase._step_summary once the agent finishes its walkthrough.
+    """
+    wanted = set(item_ids)
+    selected = [i for i in qr_state.get("items", []) if i.get("id") in wanted]
+    todo = [i for i in selected if i.get("status", "TODO") == "TODO"]
+    if todo:
+        return ["UNRECORDED"] + [f"  {i['id']}" for i in todo]
+    failed = [i for i in selected if i.get("status") == "FAIL"]
+    if not failed:
+        return ["PASS"]
+    lines = ["FAIL"]
+    for item in failed:
+        severity = item.get("severity") or QA_ITEM_DEFAULTS["severity"]
+        finding = " ".join((item.get("finding") or "").split())
+        if not finding:
+            finding = "(no finding recorded)"
+        elif len(finding) > FINDING_MAX_CHARS:
+            finding = finding[:FINDING_MAX_CHARS] + "..."
+        lines.append(f"{item['id']} [{severity}]: {finding}")
+    return lines
 
 
 class VerifyBase(ABC):
@@ -133,7 +184,7 @@ class VerifyBase(ABC):
         item_flags = " ".join(f"--qr-item {id}" for id in item_ids)
 
         context_file = get_context_path(state_dir)
-        context_display = render_context_file(context_file) if context_file else ""
+        context_display = render_context_or_notice(context_file) if context_file else ""
 
         qr_state = load_qr_state(state_dir, self.PHASE)
         if not qr_state:
@@ -155,10 +206,10 @@ class VerifyBase(ABC):
                 }
             items.append(item)
 
-        item_summary = []
-        for item in items:
-            severity = item.get("severity", "SHOULD")
-            item_summary.append(f"  {item['id']} [{severity}]: {item.get('check', '')[:60]}")
+        item_summary = [
+            f"  {i['id']} [{i.get('severity', 'SHOULD')}]: {i.get('check', '')[:60]}"
+            for i in items
+        ]
 
         return {
             "title": f"QR Verify Step 1/{total_steps}: Context ({self.PHASE})",
@@ -175,6 +226,8 @@ class VerifyBase(ABC):
                 "UNDERSTAND the checks you need to perform.",
                 "Note the scope: '*' means macro check, 'file:path:lines' means specific location.",
                 "Severity indicates blocking behavior: MUST blocks all iterations, SHOULD blocks 1-4.",
+                "",
+                *VERDICT_TIMING_LINES,
             ],
             "next": f"python3 -m {module_path} --step 2{state_dir_arg} {item_flags}",
         }
@@ -228,6 +281,21 @@ class VerifyBase(ABC):
             "next": f"python3 -m {module_path} --step {current_step + 1}{state_dir_arg} {item_flags}",
         }
 
+    def _late_evidence_lines(self, state_dir: str, item_ids: list[str]) -> list[str]:
+        """LATE EVIDENCE block: downgrade form limited to this walkthrough's items."""
+        # A write outside the walkthrough would appear in no agent's summary block.
+        return [
+            "LATE EVIDENCE:",
+            "If this item's analysis shows that an EARLIER item of this walkthrough",
+            "(an id in the list below) should not have passed, downgrade it as well:",
+            f"  python3 -m {CLI_MODULE} --state-dir {state_dir} --qr-phase {self.PHASE} \\",
+            "    update-item <earlier-id> --status FAIL --finding '<reason>'",
+            f"  Items of this walkthrough: {', '.join(item_ids)}",
+            "- Never update an item outside this list.",
+            "- PASS->FAIL is accepted; FAIL->PASS is rejected within this iteration.",
+            "",
+        ]
+
     def _step_confirm(self, state_dir: str, module_path: str, item_ids: list[str], item_idx: int, total_steps: int) -> dict:
         """CONFIRM step: Verify confidence, record result via cli/qr.py."""
         state_dir_arg = f" --state-dir {state_dir}"
@@ -240,13 +308,8 @@ class VerifyBase(ABC):
         severity = item.get("severity", "SHOULD") if item else "SHOULD"
 
         # Determine next step
-        next_step = current_step + 1
-        if item_idx + 1 < len(item_ids):
-            # More items to process
-            next_action = f"python3 -m {module_path} --step {next_step}{state_dir_arg} {item_flags}"
-        else:
-            # This was the last item, proceed to SUMMARY
-            next_action = f"python3 -m {module_path} --step {next_step}{state_dir_arg} {item_flags}"
+        # Next step is the following item's ANALYZE, or SUMMARY after the last item
+        next_action = f"python3 -m {module_path} --step {current_step + 1}{state_dir_arg} {item_flags}"
 
         return {
             "title": f"QR Verify Step {current_step}/{total_steps}: Confirm {item_id} ({self.PHASE})",
@@ -269,50 +332,60 @@ class VerifyBase(ABC):
                 f"  python3 -m {CLI_MODULE} --state-dir {state_dir} --qr-phase {self.PHASE} \\",
                 f"    update-item {item_id} --status FAIL --finding '<one-line explanation>'",
                 "",
-                "Execute ONE of the above commands, then proceed.",
+                "Record the current item exactly once with ONE of the above commands.",
+                "",
+                *self._late_evidence_lines(state_dir, item_ids),
+                "Then proceed.",
             ],
             "next": next_action,
         }
 
     def _step_summary(self, state_dir: str, module_path: str, item_ids: list[str], total_steps: int) -> dict:
-        """SUMMARY step: Count results, output single word PASS or FAIL."""
+        """SUMMARY step: render the verdict block from recorded item states."""
+        title = f"QR Verify Step {total_steps}/{total_steps}: Summary ({self.PHASE})"
+        qr_state = load_qr_state(state_dir, self.PHASE)
+        if not qr_state:
+            return {
+                "title": title,
+                "actions": [f"ERROR: Could not load qr-{self.PHASE}.json"],
+                "next": "",
+            }
+
+        block = render_verdict_block(qr_state, item_ids)
+        if block[0] == "UNRECORDED":
+            commands = [
+                f"  python3 -m {CLI_MODULE} --state-dir {state_dir} --qr-phase {self.PHASE} \\"
+                f"\n    update-item {line.strip()} --status <PASS|FAIL> [--finding '<reason>']"
+                for line in block[1:]
+            ]
+            return {
+                "title": title,
+                "actions": [
+                    "UNRECORDED items (no verdict written yet):",
+                    *block[1:],
+                    "",
+                    "Record each with:",
+                    *commands,
+                    "",
+                    "Then re-run this step:",
+                    f"  python3 -m {module_path} --step {total_steps} --state-dir {state_dir} "
+                    + " ".join(f"--qr-item {i}" for i in item_ids),
+                ],
+                "next": "",
+            }
+
         return {
-            "title": f"QR Verify Step {total_steps}/{total_steps}: Summary ({self.PHASE})",
+            "title": title,
             "actions": [
                 f"VERIFICATION COMPLETE: {len(item_ids)} items processed",
                 "",
-                "=" * 60,
-                "FINAL OUTPUT FORMAT - READ THIS CAREFULLY",
-                "=" * 60,
+                "Your ENTIRE response is the block between the markers, verbatim:",
+                "- The first line is exactly PASS or FAIL; nothing precedes it.",
+                "- No markdown, no 'VERDICT:' prefix, no prose after the block.",
                 "",
-                "After processing all items, output EXACTLY ONE WORD:",
-                "",
-                "    PASS",
-                "",
-                "  or",
-                "",
-                "    FAIL",
-                "",
-                "RULES:",
-                "- Your ENTIRE response after the CLI commands is ONE WORD",
-                "- No markdown headers (## or **)",
-                "- No 'VERDICT:' prefix",
-                "- No explanation or reasoning",
-                "- No prose of any kind",
-                "- The finding/explanation goes in the --finding flag, NOT in your output",
-                "",
-                "WRONG outputs (DO NOT DO THIS):",
-                "  '## VERDICT: FAIL'",
-                "  '**FAIL**: The check failed because...'",
-                "  'FAIL: M-002 lists buffer_test.go...'",
-                "  'FAIL\\n\\nThe analysis shows...'",
-                "",
-                "CORRECT outputs (DO THIS):",
-                "  'PASS'",
-                "  'FAIL'",
-                "",
-                "If ANY item fails -> output: FAIL",
-                "If ALL items pass -> output: PASS",
+                "---BEGIN RESPONSE---",
+                *block,
+                "---END RESPONSE---",
             ],
             "next": "",
         }

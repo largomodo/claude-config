@@ -68,6 +68,14 @@ Domain types (BoundedInt, ChoiceSet, Constant) live in workflow/types.py alongsi
 
 BoundedInt(1, 5) for iteration domain matches QR_ITERATION_LIMIT constant. Hardcoded to avoid import coupling to config constants. Current value (5) is standard across all iterating workflows.
 
+### Planner Scripts Tested In-Process
+
+Planner scripts (orchestrator, QR, fix-mode, handoff) sit outside the Workflow harness that test_workflow_steps.py enumerates, so their tests import the modules and call `get_step_guidance` or the command functions directly. Assertions on dispatch and step text repeat the prompt wording; the duplication is accepted because a reworded prompt that drops a rule such as run-every-step-until-the-file-exists should fail a test.
+
+### Optional Dependencies and the Canonical Command
+
+Schema tests call `pytest.importorskip("pydantic")`, and some tests need hypothesis. Without them a run passes with those tests skipped, which hides schema regressions. The canonical command installs both: `uvx --with pydantic --with hypothesis pytest tests/ -v`. Plain `pytest tests/ -v` still works but skips those tests.
+
 ## Invariants
 
 - All tests live in `tests/` and run through pytest; no test files elsewhere in the codebase

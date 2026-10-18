@@ -24,8 +24,10 @@ This works by:
 Invariants:
 - Lock holder is sole writer; readers may see stale data but never partial writes
 - os.rename() is atomic on POSIX; no reader sees half-written JSON
-- PASS is terminal; PASS->FAIL transition errors immediately
+- Verdicts move toward FAIL within an iteration: PASS->FAIL is accepted,
+  FAIL->PASS is refused until a later iteration (see qr_commands.check_transition)
 - FAIL requires --finding; prevents silent status changes
+- Every accepted write stamps the item with the file's iteration; the stamp lets a later iteration release a FAIL
 """
 
 from __future__ import annotations
@@ -42,20 +44,8 @@ from . import qr_commands
 from .dispatch import discover_methods, batch as batch_dispatch, list_methods
 
 
-# Valid status values (match QAItemStatus enum)
-VALID_STATUSES = frozenset({"PASS", "FAIL"})
-
 # Valid severity values (per conventions/severity.md)
 VALID_SEVERITIES = frozenset({"MUST", "SHOULD", "COULD"})
-
-# Terminal statuses that cannot be changed
-TERMINAL_STATUSES = frozenset({"PASS"})
-
-# Statuses that require finding
-REQUIRES_FINDING = frozenset({"FAIL"})
-
-# Statuses that forbid finding
-FORBIDS_FINDING = frozenset({"PASS"})
 
 
 def error_exit(msg: str, code: int = 1):
@@ -114,37 +104,10 @@ def find_item(qr_state: dict, item_id: str) -> tuple[int, dict | None]:
     return -1, None
 
 
-def validate_transition(current_status: str, new_status: str, item_id: str):
-    """Validate status transition is allowed.
-
-    State transitions:
-    - TODO -> PASS: verification succeeded
-    - TODO -> FAIL: verification found issue
-    - FAIL -> PASS: fix applied and re-verified
-    - FAIL -> FAIL: re-verification still finds issues (findings update)
-    - PASS -> *: forbidden; if previously passed, can't unpass
-    """
-    if current_status in TERMINAL_STATUSES:
-        error_exit(
-            f"Item {item_id} has terminal status {current_status}. "
-            f"Cannot transition to {new_status}."
-        )
-
-
-def cmd_update_item(state_dir: str, phase: str, args: list[str]):
-    """Update a single QR item status.
-
-    This is the core operation for parallel verify agents.
-    Uses file locking to prevent concurrent write corruption.
-    """
-    if not args:
-        error_exit("Usage: update-item <id> --status <PASS|FAIL> [--finding <text>] [--severity <MUST|SHOULD|COULD>]")
-
+def _parse_update_args(args: list[str]) -> tuple[str, str | None, str | None, str | None]:
+    """Parse update-item args into (item_id, status, finding, severity)."""
     item_id = args[0]
-    status = None
-    finding = None
-    severity = None
-
+    status = finding = severity = None
     i = 1
     while i < len(args):
         if args[i] == "--status" and i + 1 < len(args):
@@ -160,63 +123,34 @@ def cmd_update_item(state_dir: str, phase: str, args: list[str]):
             i += 2
         else:
             i += 1
+    return item_id, status, finding, severity
 
-    # Validate status
+
+def cmd_update_item(state_dir: str, phase: str, args: list[str]):
+    """Update a single QR item status.
+
+    Delegates the locked read-modify-write, status/finding validation and
+    transition rule to qr_commands.update_item so the CLI and the batch RPC
+    path cannot drift; this function only parses flags and maps errors to
+    the CLI's XML exit.
+    """
+    if not args:
+        error_exit("Usage: update-item <id> --status <PASS|FAIL> [--finding <text>] [--severity <MUST|SHOULD|COULD>]")
+
+    item_id, status, finding, severity = _parse_update_args(args)
     if not status:
         error_exit("--status required (PASS or FAIL)")
 
-    if status not in VALID_STATUSES:
-        error_exit(f"Invalid status: {status}. Must be PASS or FAIL.")
+    ctx = qr_commands.QRContext(state_dir=Path(state_dir), phase=phase)
+    try:
+        result = qr_commands.update_item(ctx, item_id, status, finding, severity)
+    except (ValueError, FileNotFoundError) as e:
+        error_exit(str(e))
 
-    # Validate finding requirements
-    if status in REQUIRES_FINDING and not finding:
-        error_exit(f"Status {status} requires --finding to explain what failed.")
-
-    if status in FORBIDS_FINDING and finding:
-        error_exit(f"Status {status} forbids --finding. PASS means no issues found.")
-
-    qr_path = get_qr_path(state_dir, phase)
-    if not qr_path.exists():
-        error_exit(f"QR state file not found: {qr_path}")
-
-    # File locking for concurrent access
-    # fcntl.flock() with LOCK_EX blocks until exclusive lock acquired
-    # Lock is released automatically when file descriptor is closed
-    with open(qr_path, "r+") as f:
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-
-        qr_state = load_qr_state_locked(f)
-
-        idx, item = find_item(qr_state, item_id)
-        if idx < 0:
-            error_exit(f"Item {item_id} not found in qr-{phase}.json")
-
-        current_status = item.get("status", "TODO")
-        validate_transition(current_status, status, item_id)
-
-        # Version increments on status change
-        item["version"] = item.get("version", 1) + 1
-        item["status"] = status
-        if finding:
-            item["finding"] = finding
-        elif "finding" in item and status == "PASS":
-            # Clear finding on PASS (e.g., FAIL->PASS transition)
-            del item["finding"]
-        if severity:
-            item["severity"] = severity
-
-        qr_state["items"][idx] = item
-
-        # Atomic write
-        save_qr_state_atomic(state_dir, phase, qr_state)
-
-        # Lock released when f closes
-
-    # Structured output matching plan.py format
     print_entity_result(EntityResult(
-        id=item_id,
-        version=item["version"],
-        operation="updated"
+        id=result["id"],
+        version=result["version"],
+        operation=result["operation"],
     ))
 
 

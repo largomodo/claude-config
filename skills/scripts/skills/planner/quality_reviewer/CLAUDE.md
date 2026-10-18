@@ -7,7 +7,7 @@ Quality Review scripts: per-phase decompose/verify pairs plus reconciliation.
 | File                         | What                                           | When to read                              |
 | ---------------------------- | ---------------------------------------------- | ----------------------------------------- |
 | `README.md`                  | QR architecture, QA integration, decisions     | Understanding QR workflow, state tracking |
-| `qr_verify_base.py`          | Base class for QR verify scripts               | Modifying shared verify behavior          |
+| `qr_verify_base.py`          | Base class for QR verify scripts; confirm step, summary step verdict block, late-evidence downgrade instruction | Modifying shared verify behavior, verdict output format |
 | `plan_design_qr_decompose.py`| QR decomposition for plan-design phase         | Modifying plan design review items        |
 | `plan_design_qr_verify.py`   | QR verification for plan-design phase          | Modifying plan design verification        |
 | `plan_code_qr_decompose.py`  | QR decomposition for plan-code phase           | Modifying plan code review items          |
@@ -25,4 +25,4 @@ Quality Review scripts: per-phase decompose/verify pairs plus reconciliation.
 
 | Directory  | What                                     | When to read                            |
 | ---------- | ---------------------------------------- | --------------------------------------- |
-| `prompts/` | Shared decomposition prompts and utils   | Modifying decomposition prompt assembly |
+| `prompts/` | Shared decomposition prompts and utils; step 1 run-to-completion text | Modifying decomposition prompt assembly |

@@ -294,6 +294,37 @@ def qr_file_exists(state_dir: str, phase: str) -> bool:
     return path.exists()
 
 
+def _stamp_ending_iteration(qr_state: dict) -> int:
+    """Stamp unstamped items with the iteration that is ending; returns it.
+
+    The stamp must be lower than the new iteration so check_transition
+    releases the item, and it is the iteration in which the verdict was
+    actually written. Stamping with the new value would keep a FAIL blocked
+    for a whole extra round.
+    """
+    ending_iteration = qr_state.get("iteration", 1)
+    for item in qr_state.get("items", []):
+        if item.get("iteration") is None:
+            item["iteration"] = ending_iteration
+    return ending_iteration
+
+
+def _write_json_atomic(path: Path, data: dict) -> None:
+    """Write JSON via temp file in the same directory, then rename over path."""
+    import os
+    import tempfile
+
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, 'w') as tmp:
+            json.dump(data, tmp, indent=2)
+        os.rename(tmp_path, str(path))
+    except Exception:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
+
 def increment_qr_iteration(state_dir: str, phase: str) -> int | None:
     """Increment iteration counter in qr-{phase}.json.
 
@@ -301,6 +332,18 @@ def increment_qr_iteration(state_dir: str, phase: str) -> int | None:
     Iteration tracks verification cycles (decompose->verify->fix->verify),
     not decomposition invocations. Decompose always writes iteration=1;
     verify increments on RETRY after fixes applied.
+
+    WHY stamp unstamped items before incrementing:
+    check_transition treats an item with no iteration stamp as written in the
+    current iteration, so an unstamped FAIL cannot be upgraded to PASS. The owner
+    of the increment is the only place that can release such items without
+    permitting a same-iteration FAIL->PASS: it stamps them with the iteration
+    that is ending, which is lower than the new one.
+
+    WHY late downgrades are own-list-only (context for the stamping):
+    parallel verify agents hold disjoint item sets, so a PASS->FAIL rewrite
+    is only ever issued by the agent that owns the item (qr_verify_base.py
+    LATE EVIDENCE text); stamps record the iteration of that write.
 
     WHY atomic write:
     POSIX rename is atomic; prevents corruption if process terminates
@@ -319,27 +362,14 @@ def increment_qr_iteration(state_dir: str, phase: str) -> int | None:
     Returns:
         New iteration value, or None if file doesn't exist
     """
-    import os
-    import tempfile
-
     path = Path(state_dir) / f"qr-{phase}.json"
     if not path.exists():
         return None
 
     qr_state = json.loads(path.read_text())
-    iteration = qr_state.get("iteration", 1) + 1
+    iteration = _stamp_ending_iteration(qr_state) + 1
     qr_state["iteration"] = iteration
-
-    # Atomic write via temp file
-    fd, tmp_path = tempfile.mkstemp(dir=state_dir, suffix=".tmp")
-    try:
-        with os.fdopen(fd, 'w') as tmp:
-            json.dump(qr_state, tmp, indent=2)
-        os.rename(tmp_path, str(path))
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
+    _write_json_atomic(path, qr_state)
 
     return iteration
 
