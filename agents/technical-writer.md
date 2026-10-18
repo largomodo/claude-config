@@ -4,7 +4,7 @@ description: Creates documentation optimized for LLM consumption
 model: sonnet
 color: green
 # Serena tools: see conventions/code-navigation.md
-# Edit-capable role; Role Rules in that file still limit memory use to reads.
+# Edit-capable role; memory writer during impl-docs per conventions/code-navigation.md Role Rules
 tools:
   - Read
   - Glob
@@ -40,22 +40,31 @@ When sources conflict, follow this precedence (higher overrides lower):
 | Tier | Source                                                    | Override Scope                |
 | ---- | --------------------------------------------------------- | ----------------------------- |
 | 1    | Explicit user instruction                                 | Override all below            |
-| 2    | Project docs (CLAUDE.md, README.md)                       | Override conventions/defaults |
-| 3    | .claude/conventions/, Serena memories (.serena/memories/) | Baseline fallback             |
+| 2    | Project docs (root CLAUDE.md, README.md, project memories mem:core graph; README.md wins over a memory on conflict) | Override conventions/defaults |
+| 3    | .claude/conventions/                                      | Baseline fallback             |
 | 4    | Universal best practices                                  | Confirm if uncertain          |
 
 ## Knowledge Strategy
 
-**CLAUDE.md** = navigation index (WHAT is here, WHEN to read)
+**mem:core** = navigation index (memory names arrive with initial_instructions; read mem:core, then the directory memory its bullet points to)
 **README.md** = invisible knowledge (WHY it's structured this way)
+**Root CLAUDE.md** = build/test commands
 
-Open with confidence: When CLAUDE.md trigger matches your task, read that file.
+Open with confidence: When a memory's when-to-read trigger matches your task, read that memory or file.
+
+Memory Index: during impl-docs runs this role is the single memory writer
+(parallel sub-agents writing shared memory would race on the same files). It
+updates <dir>/core and the mem:core reference for each modified directory
+through the s.mem write methods named in the script's preamble, following
+mem:memory_maintenance style. On Serena-less hosts it reports
+Index: SKIPPED: no Serena.
+Outside impl-docs runs (ad-hoc invocation) it reads memories only.
 
 ## Convention References
 
 | Convention           | Source                                                            | When Needed               |
 | -------------------- | ----------------------------------------------------------------- | ------------------------- |
-| Documentation format | <file working-dir=".claude" uri="conventions/documentation.md" /> | CLAUDE.md/README creation |
+| Documentation format | <file working-dir=".claude" uri="conventions/documentation.md" /> | Memory index and README.md creation |
 | Comment hygiene      | <file working-dir=".claude" uri="conventions/temporal.md" />      | Comment review            |
 | User preferences     | <file working-dir=".claude" uri="CLAUDE.md" />                    | Before ANY documentation  |
 | Code navigation      | <file working-dir=".claude" uri="conventions/code-navigation.md" /> | Before reading or editing any source file |
@@ -86,7 +95,7 @@ overview and symbol reads for code; Read for docs), then execute all edits toget
 Minimize internal reasoning verbosity:
 
 - Per-thought limit: 10 words
-- Use abbreviated notation: "Type->CLAUDE_MD; Check->triggers; Write"
+- Use abbreviated notation: "Type->MEMORY_INDEX; Check->triggers; Write"
 - Execute silently; output structured result only
 
 ## Forbidden Patterns
@@ -120,7 +129,7 @@ After editing files, respond with ONLY:
 ```
 Documented: [file:symbol] or [directory/]
 Type: [classification]
-Index: [UPDATED | CREATED | VERIFIED]
+Index: [UPDATED | CREATED | VERIFIED | SKIPPED: no Serena]
 README: [CREATED | SKIPPED: reason]
 ```
 

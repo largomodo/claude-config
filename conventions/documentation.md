@@ -1,80 +1,96 @@
 # Documentation Conventions
 
 This is the authoritative documentation conventions file. All code-adjacent
-documentation (CLAUDE.md, README.md) must follow these principles.
+documentation (root CLAUDE.md, memory index, README.md) must follow these
+principles.
 
 ## Core Principles
 
-**Self-contained documentation**: All code-adjacent documentation (CLAUDE.md,
-README.md) must be self-contained. Do NOT reference external authoritative
-sources (doc/ directories, wikis, external documentation). If knowledge exists
-in an authoritative source, it must be summarized locally. Duplication is
-acceptable; the maintenance burden is the cost of locality.
+**Self-contained documentation**: README.md must be self-contained. Do NOT
+reference external authoritative sources (doc/ directories, wikis, external
+documentation). If knowledge exists in an authoritative source, it must be
+summarized locally. Duplication is acceptable; the maintenance burden is the
+cost of locality.
 
-**CLAUDE.md = pure index**: CLAUDE.md files are navigation aids only. They
-contain WHAT is in the directory and WHEN to read each file. All explanatory
-content (architecture, decisions, invariants) belongs in README.md.
+**Root CLAUDE.md = launch-loaded commands and top-level index**: the only
+CLAUDE.md in a repository. Build/test commands and the top-level file index.
+
+**Memory index (mem:core graph) = navigation aid**: WHAT is in each directory
+and WHEN to read each file. Machine-local under `.serena/memories`. All
+explanatory content (architecture, decisions, invariants) belongs in
+README.md.
 
 **README.md = invisible knowledge**: README.md files capture knowledge NOT
 visible from reading source code. If ANY invisible knowledge exists for a
 directory, README.md is required.
 
-## CLAUDE.md Format Specification
+## Memory Index Specification
+
+The memory index is a Serena project memory graph under `.serena/memories`.
+It is machine-local (gitignored, not committed) and is the navigation aid for
+directories and files. A `mem:` pointer to a memory that does not exist is
+skipped, not an error. Serena-less hosts rely on root CLAUDE.md + README.md.
 
 ### Index Format
 
-Use tabular format with What and When columns:
+`mem:core` is the graph root. It lists top-level directories as dense
+bullets:
 
 ```markdown
-## Files
-
-| File        | What                           | When to read                              |
-| ----------- | ------------------------------ | ----------------------------------------- |
-| `cache.rs`  | LRU cache with O(1) operations | Implementing caching, debugging evictions |
-| `errors.rs` | Error types and Result aliases | Adding error variants, handling failures  |
-
-## Subdirectories
-
-| Directory   | What                          | When to read                              |
-| ----------- | ----------------------------- | ----------------------------------------- |
-| `config/`   | Runtime configuration loading | Adding config options, modifying defaults |
-| `handlers/` | HTTP request handlers         | Adding endpoints, modifying request flow  |
+- `cache/` -- LRU cache and eviction; read `mem:cache/core` when implementing caching, debugging evictions
+- `handlers/` -- HTTP request handlers; read `mem:handlers/core` when adding endpoints, modifying request flow
 ```
 
-### Column Guidelines
+`<project-relative-dir>/core` lists the files of one directory as dense
+bullets, and names README.md by path when invisible knowledge exists:
 
-- **File/Directory**: Use backticks around names: `cache.rs`, `config/`
-- **What**: Factual description of contents (nouns, not actions)
-- **When to read**: Task-oriented triggers using action verbs (implementing,
-  debugging, modifying, adding, understanding)
-- At least one column must have content; empty cells use `-`
+```markdown
+- `cache.rs` -- LRU cache with O(1) operations; read when implementing caching, debugging evictions
+- `errors.rs` -- error types and Result aliases; read when adding error variants, handling failures
+- `README.md` -- eviction design rationale; read when changing eviction policy
+```
+
+### Memory Rules
+
+- **Name**: the directory's path relative to the Serena project root (the
+  directory holding `.serena/`) plus `/core`. A repository that is a subtree
+  of the project keeps its subtree prefix (`claude-config/skills/planner/core`).
+- **References**: `mem:name` in backticks, with the when-to-read guidance in
+  the referring bullet. A memory never states when to read itself.
+- **What**: factual description of contents (nouns, not actions).
+- **When to read**: task-oriented triggers using action verbs (implementing,
+  debugging, modifying, adding, understanding).
+- **Budget**: ~200 tokens per memory.
+- **Style**: Serena's built-in `mem:memory_maintenance` conventions (dense
+  bullets, topic folders mirroring paths, stable facts only).
+  Memories are machine-local: they index the tree, they never replace
+  README.md as the committed carrier of invisible knowledge.
 
 ### Trigger Quality Test
 
-Given task "add a new validation rule", can an LLM scan the "When to read"
-column and identify the right file?
+Given task "add a new validation rule", can an LLM scan the when-to-read
+triggers and identify the right file?
 
 ### Generated and Vendored Code
 
-CLAUDE.md MUST flag files/directories that should not be manually edited:
+The directory memory and README.md MUST flag files/directories that should
+not be manually edited, with the regeneration command or upstream source:
 
-| Directory      | What                              | When to read        |
-| -------------- | --------------------------------- | ------------------- |
-| `proto/gen/`   | Generated from proto/. Run `make` | Never edit directly |
-| `vendor/`      | Vendored deps, upstream: go.mod   | Never edit directly |
-| `third_party/` | Copied from github.com/foo v1.2.3 | Never edit directly |
-
-The "When to read" column should indicate these are not editable. Include
-regeneration commands in the "What" column or in a dedicated Regenerate section.
+```markdown
+- `proto/gen/` -- generated from proto/; run `make`; never edit directly
+- `vendor/` -- vendored deps, upstream: go.mod; never edit directly
+- `third_party/` -- copied from github.com/foo v1.2.3; never edit directly
+```
 
 This prevents LLMs from wasting effort analyzing or "improving" auto-generated
 code, and prevents edits that will be overwritten or cause merge conflicts.
 
 See also: conventions/code-quality/baseline.md "Generated and Vendored Code Awareness".
 
-### ROOT vs SUBDIRECTORY CLAUDE.md
+### Root CLAUDE.md
 
-**ROOT CLAUDE.md:**
+The root CLAUDE.md is the only CLAUDE.md in a repository. It loads at launch
+and carries commands and the top-level index:
 
 ```markdown
 # [Project Name]
@@ -104,39 +120,14 @@ See also: conventions/code-quality/baseline.md "Generated and Vendored Code Awar
 [Setup instructions, environment requirements, workflow notes]
 ```
 
-**SUBDIRECTORY CLAUDE.md:**
+Subdirectory CLAUDE.md files do not exist: Claude Code loads them only when
+a host tool touches a file in that directory, which Serena-first navigation
+never does. Their role is carried by the memory index above. Explanatory
+content (architecture, decisions, invariants) belongs in README.md.
 
-```markdown
-# [directory-name]/
-
-## Files
-
-| File | What | When to read |
-| ---- | ---- | ------------ |
-
-## Subdirectories
-
-| Directory | What | When to read |
-| --------- | ---- | ------------ |
-```
-
-**Critical constraint:** CLAUDE.md files are navigation aids, not explanatory
-documents. They contain:
-
-- File/directory index (REQUIRED): tabular format with What/When columns
-- One-sentence overview (OPTIONAL): what this directory is
-- Operational sections (OPTIONAL): Build, Test, Regenerate, Deploy, or similar
-  commands specific to this directory's artifacts
-
-They do NOT contain:
-
-- Architectural explanations (-> README.md)
-- Design decisions or rationale (-> README.md)
-- Invariants or constraints (-> README.md)
-- Multi-paragraph prose (-> README.md)
-
-Operational sections must be copy-pasteable commands with minimal context, not
-explanatory prose about why the build works a certain way.
+Operational sections in the root CLAUDE.md must be copy-pasteable commands
+with minimal context, not explanatory prose about why the build works a
+certain way.
 
 ## README.md Specification
 

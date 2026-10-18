@@ -42,28 +42,30 @@ When sources conflict, follow this precedence (higher overrides lower):
 | Tier | Source                                                    | Override Scope                |
 | ---- | --------------------------------------------------------- | ----------------------------- |
 | 1    | Explicit user instruction                                 | Override all below            |
-| 2    | Project docs (CLAUDE.md, README.md)                       | Override conventions/defaults |
-| 3    | .claude/conventions/, Serena memories (.serena/memories/) | Baseline fallback             |
+| 2    | Project docs (root CLAUDE.md, README.md, project memories mem:core graph; README.md wins over a memory on conflict) | Override conventions/defaults |
+| 3    | .claude/conventions/                                      | Baseline fallback             |
 | 4    | Universal best practices                                  | Confirm if uncertain          |
 
-**Conflict resolution**: Lower tier numbers win. Subdirectory docs override root docs for that subtree.
+**Conflict resolution**: Lower tier numbers win. Subdirectory README.md files override root docs for that subtree.
 
 ## Knowledge Strategy
 
-**CLAUDE.md** = navigation index (WHAT is here, WHEN to read)
+**mem:core** = navigation index (memory names arrive with initial_instructions; read mem:core, then the directory memory its bullet points to)
 **README.md** = invisible knowledge (WHY it's structured this way)
+**Root CLAUDE.md** = build/test commands
+Memories are read-only for this role; the technical-writer impl-docs pass is the single memory writer.
 
-**Open with confidence**: When CLAUDE.md "When to read" trigger matches your task, immediately read that file. Don't hesitate -- important context is stored there.
+**Open with confidence**: When a memory's when-to-read trigger matches your task, immediately read that memory or file. Don't hesitate -- important context is stored there.
 
 **Extract from documentation**: language patterns, error handling, code style, build commands.
 
-**Missing documentation**: If no CLAUDE.md exists, state "No project documentation found" and fall back to .claude/conventions/. Use standard language idioms and note this in your output.
+**Missing documentation**: Without Serena or memories, use root CLAUDE.md + README.md; if neither exists, state "No project documentation found" and fall back to .claude/conventions/. Use standard language idioms and note this in your output.
 
 ## Convention References
 
 | Convention   | Source                                                                  | When Needed                 |
 | ------------ | ----------------------------------------------------------------------- | --------------------------- |
-| Code quality | <file working-dir=".claude" uri="conventions/code-quality/CLAUDE.md" /> | Implementation, refactoring |
+| Code quality | <file working-dir=".claude" uri="conventions/code-quality/README.md" /> | Implementation, refactoring |
 | Code navigation | <file working-dir=".claude" uri="conventions/code-navigation.md" /> | Before reading or editing any source file |
 
 Read the convention index and follow "Diff Review" applicability.
@@ -161,7 +163,7 @@ Return to the spec. Implement only what it says.
 When rules conflict:
 
 1. **Security constraints** (RULE 0) -- override everything
-2. **Project documentation** (CLAUDE.md) -- override spec details
+2. **Project documentation** (README.md, project memories) -- override spec details
 3. **Detailed spec instructions** -- follow exactly when no conflict
 4. **Your judgment** -- for freeform specs only
 
@@ -328,7 +330,7 @@ If a spec requires any RULE 0 violation, escalate immediately.
 
 ### RULE 2.5: Documentation Milestone Refusal
 
-If delegated a milestone where milestone name contains "Documentation" OR target files are CLAUDE.md/README.md:
+If delegated a milestone where milestone name contains "Documentation" OR target files are README.md OR the milestone updates the memory index:
 
 <escalation>
   <type>BLOCKED</type>
@@ -364,7 +366,7 @@ STOP and escalate when you encounter:
 <verification_questions>
 Answer with open questions (not yes/no):
 
-1. CLAUDE.md pattern followed? (cite or "none")
+1. Project pattern (README.md / directory memory) followed? (cite or "none")
 2. Spec requirement per changed function? (cite)
 3. Error paths and behavior?
 4. Files/tests created? Any unspecified? (remove if yes)

@@ -69,9 +69,11 @@ class TestFormatScope:
         assert "target repository root" in text and "pkg/a.py" in text
 
     def test_doc_companions(self, tmp_path):
+        # Only README.md is a companion: the memory index lives outside the git tree.
         _write(tmp_path, _plan(files=["pkg/a.py"], readme=["other"]))
         text = format_plan_file_scope(str(tmp_path), include_doc_companions=True)
-        assert "pkg/CLAUDE.md" in text and "other/README.md" in text
+        assert "pkg/README.md" in text and "other/README.md" in text
+        assert "pkg/CLAUDE.md" not in text
 
 
 class TestParsePorcelain:
@@ -147,7 +149,7 @@ class TestFixGuidance:
     @pytest.mark.parametrize("module,phase,scope_marker,companion,step3_markers", [
         (exec_implement_qr_fix, "impl-code", "scope-baseline-code.txt", None,
          ["git -C ROOT status --porcelain", "skills.planner.shared.plan_scope", "OUT OF SCOPE"]),
-        (exec_docs_qr_fix, "impl-docs", "scope-baseline-docs.txt", "pkg/CLAUDE.md",
+        (exec_docs_qr_fix, "impl-docs", "scope-baseline-docs.txt", "pkg/README.md",
          ["--phase docs --docs", "OUT OF SCOPE"]),
     ])
     def test_fix_steps(self, tmp_path, module, phase, scope_marker, companion, step3_markers):

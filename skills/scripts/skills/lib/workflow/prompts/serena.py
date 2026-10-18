@@ -3,10 +3,12 @@
 Mirrors conventions/code-navigation.md (Tier 3) as Python constants because
 sub-agents obey script stdout during planner runs, not agent prose; loading
 the convention via get_convention() would need a REGISTRY.yaml entry per
-role and cost ~400 tokens per step. Two precomposed preambles (read, edit)
-cover both variants; skills/README.md forbids prompt-fragment builder
-functions in the shared lib, so no serena_preamble(edit: bool) function
-exists here. tests/test_serena_policy.py enforces the mirror in both
+role and cost ~400 tokens per step. Three precomposed preambles (read, edit,
+docs) cover the variants: docs is the edit preamble plus the memory-write
+clause, selected for the technical-writer exec_* scripts alone because the
+impl-docs dispatch is the single memory writer. skills/README.md forbids
+prompt-fragment builder functions in the shared lib, so no
+serena_preamble(edit: bool) function exists here. tests/test_serena_policy.py enforces the mirror in both
 directions: every s.<facade>.<method> name in the tuples below appears in
 the convention, and every s.<facade>.<method> name in the convention or the
 preambles is one of these constants' entries.
@@ -58,15 +60,20 @@ SERENA_MEMORY_READ_METHODS = (
     "mem.read_memory",
 )
 
-# Never called by a sub-agent: parallel sub-agents writing, renaming or
-# deleting the same memory would race and corrupt shared project knowledge.
-# No allowlist can withhold these from serena_repl, so the rule is stated in
-# the convention and repeated in the preamble.
-SERENA_SUBAGENT_DENIED_METHODS = (
+# Granted to the technical-writer exec_docs_* runs alone because executor step
+# 6 dispatches one technical-writer after impl-code QR; parallel writers would
+# race. No allowlist can withhold these from serena_repl, so the grant is
+# stated in the convention and carried by SERENA_DOCS_PREAMBLE only.
+SERENA_MEMORY_WRITE_METHODS = (
     "mem.write_memory",
     "mem.edit_memory",
     "mem.rename_memory",
     "mem.delete_memory",
+)
+
+# Main-session bootstrap only: Serena runs onboarding at most once per
+# conversation and it rewrites the graph root.
+SERENA_SUBAGENT_DENIED_METHODS = (
     "mem.onboarding",
 )
 
@@ -91,13 +98,13 @@ SERENA_HOST_COVERED_METHODS = (
 # SHARED PROMPTS
 # ============================================================================
 
-# Shared core of both preambles. initial_instructions mints a fresh random
-# session id per call, and the REPL namespace persists per id, so each
-# sub-agent calls it for its own id; a shared id lets parallel agents
-# overwrite each other's variables. It also delivers Serena's manual, a cost
+# Shared core of the read, edit and docs preambles. initial_instructions
+# mints a fresh random session id per call, and the REPL namespace persists
+# per id, so each sub-agent calls it for its own id; a shared id lets
+# parallel agents overwrite each other's variables. It also delivers Serena's manual, a cost
 # of ~1.5k tokens per run accepted so this text stays compact. The first line
 # of SERENA_POLICY is the anchor test_leaf_scripts_inject matches, so it must
-# open both preambles. Examples are brace-free keyword calls:
+# open all three preambles. Examples are brace-free keyword calls:
 # the preambles are plain strings that are never .format()ed, and
 # test_preambles_have_no_braces guards that.
 SERENA_POLICY = (
@@ -109,8 +116,10 @@ SERENA_POLICY = (
     "    s.lsp.find_symbol(name_path, relative_path=path, include_body=True);\n"
     "    Read only for non-code files or a few lines after an overview.\n"
     "  References via s.lsp.find_referencing_symbols(name_path, path), never Grep.\n"
-    "  Memories (s.mem.list_memories, s.mem.read_memory) are read-only,\n"
-    "    Tier 3 below CLAUDE.md/README.md; never call an s.mem write method.\n"
+    "  Memories (s.mem.list_memories, s.mem.read_memory) are the project index:\n"
+    "    read mem:core first, then the directory memory its text points to;\n"
+    "    absent memories: root CLAUDE.md + README.md. Memory writes only when\n"
+    "    the role clause below grants them.\n"
     "  Host tools cover s.fs and s.shell: use Glob/Grep/Read/Bash instead.\n"
     "  One serena_repl call per logical step: chain overview, find_symbol and\n"
     "    filtering in code; the trailing expression is the result (no print).\n"
@@ -119,9 +128,10 @@ SERENA_POLICY = (
 
 # serena_repl is one tool for every operation, so a tools: allowlist cannot
 # withhold editing from a role and these clauses are the only lever.
-# mode_main selects the edit clause for exec_* scripts of developer and
-# technical_writer and the read clause for every other script; debugger has
-# no planner package and relies on its agent frontmatter plus the convention.
+# mode_main selects the edit clause for exec_* scripts of developer, the edit
+# clause plus the memory-write clause for exec_* scripts of technical_writer,
+# and the read clause for every other script; debugger has no planner package
+# and relies on its agent frontmatter plus the convention.
 SERENA_READ_ROLE_RULE = (
     "READ-ONLY RUN: no s.edit call, no s.fs.create_text_file, no s.shell;\n"
     "  report findings instead of changing source files."
@@ -133,6 +143,16 @@ SERENA_EDIT_ROLE_RULE = (
     "  changes); s.edit.replace_in_files(dry_run=True) before cross-file edits;\n"
     "  s.lsp.rename_symbol and s.lsp.safe_delete_symbol are reference-aware.\n"
     "  Edit only for non-code files; s.lsp.get_diagnostics_for_file after edits."
+)
+
+# Memory writes are granted by clause rather than by SERENA_POLICY because
+# serena_repl cannot withhold them from a role. Brace-free: preambles are plain
+# strings that are never .format()ed.
+SERENA_MEMORY_WRITE_RULE = (
+    "MEMORY WRITER (impl-docs, single writer): s.mem.write_memory /\n"
+    "  s.mem.edit_memory / s.mem.rename_memory / s.mem.delete_memory update\n"
+    "  <dir>/core and the mem:core reference for each modified directory,\n"
+    "  following mem:memory_maintenance style; never s.mem.onboarding."
 )
 
 # Claude Code hands every sub-agent its MCP tools deferred behind ToolSearch,
@@ -176,6 +196,23 @@ SERENA_EDIT_PREAMBLE = (
     SERENA_POLICY + "\n"
     "\n"
     + SERENA_EDIT_ROLE_RULE + "\n"
+    "\n"
+    + SERENA_LOAD_HINT + "\n"
+    "\n"
+    + SERENA_FALLBACK
+)
+
+# A third constant rather than a memory clause inside SERENA_EDIT_PREAMBLE:
+# developer exec_* scripts share the edit preamble and run wave-parallel, so
+# a memory-write grant there would let parallel agents race on shared memory.
+# Only the technical-writer exec_* scripts, whose impl-docs dispatch is
+# single-writer, select this variant.
+SERENA_DOCS_PREAMBLE = (
+    SERENA_POLICY + "\n"
+    "\n"
+    + SERENA_EDIT_ROLE_RULE + "\n"
+    "\n"
+    + SERENA_MEMORY_WRITE_RULE + "\n"
     "\n"
     + SERENA_LOAD_HINT + "\n"
     "\n"

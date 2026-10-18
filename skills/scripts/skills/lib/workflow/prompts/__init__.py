@@ -17,12 +17,13 @@ from skills.lib.workflow.prompts.subagent import (
 from skills.lib.workflow.prompts.step import format_step
 # format_file_content provides file content embedding with 4-backtick fencing
 from skills.lib.workflow.prompts.file import format_file_content
-# Serena REPL policy: read/edit preambles plus the MCP tool names and
+# Serena REPL policy: read/edit/docs preambles plus the MCP tool names and
 # facade-method tuples, so mode_main and leaf sub-agent scripts share one
 # import surface
 from skills.lib.workflow.prompts.serena import (
     SERENA_READ_PREAMBLE,
     SERENA_EDIT_PREAMBLE,
+    SERENA_DOCS_PREAMBLE,
     SERENA_MCP_TOOLS,
     SERENA_READ_METHODS,
     SERENA_EDIT_METHODS,
@@ -49,6 +50,7 @@ __all__ = [
     # Serena REPL policy
     "SERENA_READ_PREAMBLE",
     "SERENA_EDIT_PREAMBLE",
+    "SERENA_DOCS_PREAMBLE",
     "SERENA_MCP_TOOLS",
     "SERENA_READ_METHODS",
     "SERENA_EDIT_METHODS",

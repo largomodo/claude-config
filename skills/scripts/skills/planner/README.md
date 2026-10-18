@@ -167,6 +167,11 @@ Same QR block pattern as the planner, per implementation phase.
 | 9    | impl-docs-qr-route      | `qr_route_step()`         | -                 | Orchestrator     |
 | 10   | wave-next               | `wave_next_step()`        | -                 | Orchestrator     |
 
+The TW phase (step 6) updates the memory index (`<dir>/core`, `mem:core`) and README.md. The impl-docs dispatch is the single memory writer. Without Serena, root CLAUDE.md + README.md suffice: the step skips the memory index, reports `Index: SKIPPED: no Serena`, and does not stall.
+
+Step 9 routes a failing impl-docs QR back to step 6, so fix mode re-enters the
+same single dispatch and a second writer never exists.
+
 Reconciliation (validating existing code against the plan before executing)
 is not a numbered step: step 1 re-invoked with `--reconciliation-check`
 emits a per-milestone `exec_reconcile.py` dispatch block.

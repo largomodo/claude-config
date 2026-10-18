@@ -10,10 +10,10 @@ Evaluate whether code is properly documented and tested.
 
 - Documentation contradicting actual code
 - Tests with uninformative names
-- Missing provenance for generated/vendored code in CLAUDE.md
+- Missing provenance for generated/vendored code in README.md (and the directory memory when Serena is present)
 - Schema-code mismatches (fields in code missing from schema, or vice versa)
 
-**The threshold**: Flag only demonstrable incorrectness, not incompleteness. Stale docs cause hallucinations; missing docs just mean less context. Flag tests that give no behavioral information. Flag generated/vendored code without CLAUDE.md documentation. Flag schema drift only when provable mismatch exists.
+**The threshold**: Flag only demonstrable incorrectness, not incompleteness. Stale docs cause hallucinations; missing docs just mean less context. Flag tests that give no behavioral information. Flag generated/vendored code without README.md provenance documentation. Flag schema drift only when provable mismatch exists.
 
 <design-mode>
 Not applicable -- this group requires actual code to evaluate.
@@ -24,7 +24,7 @@ When evaluating actual code (Diff Review, Codebase Review, Refactor):
 
 - Does documentation contradict the code?
 - Do test names communicate behavior?
-- Is generated/vendored code documented in CLAUDE.md?
+- Is generated/vendored code documented in README.md (and the directory memory when Serena is present)?
 - Do schema definitions match code usage?
 
 Evidence format: Quote code/docs with file:line showing the issue.
@@ -119,7 +119,7 @@ Flag when test name gives no behavioral information AND is not a ticket/regressi
 Non-maintainable code (generated, vendored) must be clearly marked. Without provenance documentation, maintainers may try to modify code that should be regenerated.
 </principle>
 
-Detect: Is non-maintainable code clearly marked in CLAUDE.md? Can a maintainer tell which code is generated or vendored?
+Detect: Is non-maintainable code clearly marked in README.md (and the directory memory when Serena is present), with its regeneration command or upstream source? Can a maintainer tell which code is generated or vendored?
 
 <grep-hints>
 Pattern indicators (starting points, not definitive):
@@ -131,8 +131,8 @@ Illustrative patterns (not exhaustive -- similar violations exist):
 
 [high] Missing provenance
 
-- Generated files missing regeneration command in CLAUDE.md
-- Vendored directories missing upstream source in CLAUDE.md
+- Generated files missing regeneration command in README.md
+- Vendored directories missing upstream source in README.md
 - Any generated/vendored code without documentation of origin
 
 [medium] Unclear ownership
@@ -145,7 +145,7 @@ Generated files with regeneration command documented. Vendored code with clear u
 </exceptions>
 
 <threshold>
-Flag when file/directory matches generation patterns (e.g., *.pb.go, *_generated.*, vendor/, third_party/) AND CLAUDE.md lacks corresponding entry explaining provenance.
+Flag when file/directory matches generation patterns (e.g., *.pb.go, *_generated.*, vendor/, third_party/) AND README.md lacks corresponding entry explaining provenance.
 </threshold>
 
 ## 4. Schema-Code Coherence

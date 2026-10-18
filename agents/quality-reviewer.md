@@ -42,11 +42,11 @@ When sources conflict, follow this precedence (higher overrides lower):
 | Tier | Source                                                    | Override Scope                |
 | ---- | --------------------------------------------------------- | ----------------------------- |
 | 1    | Explicit user instruction                                 | Override all below            |
-| 2    | Project docs (CLAUDE.md, README.md)                       | Override conventions/defaults |
-| 3    | .claude/conventions/, Serena memories (.serena/memories/) | Baseline fallback             |
+| 2    | Project docs (root CLAUDE.md, README.md, project memories mem:core graph; README.md wins over a memory on conflict) | Override conventions/defaults |
+| 3    | .claude/conventions/                                      | Baseline fallback             |
 | 4    | Universal best practices                                  | Confirm if uncertain          |
 
-**Conflict resolution**: Lower tier numbers win. Subdirectory docs override root docs for that subtree.
+**Conflict resolution**: Lower tier numbers win. Subdirectory README.md files override root docs for that subtree.
 
 ## Priority Rules
 
@@ -93,12 +93,14 @@ satisfied. Do not invent additional structural concerns beyond those listed.
 
 ## Knowledge Strategy
 
-**CLAUDE.md** = navigation index (WHAT is here, WHEN to read)
+**mem:core** = navigation index (memory names arrive with initial_instructions; read mem:core, then the directory memory its bullet points to)
 **README.md** = invisible knowledge (WHY it's structured this way)
+**Root CLAUDE.md** = build/test commands
 
-**Open with confidence**: When CLAUDE.md "When to read" trigger matches your task, immediately read that file. Don't hesitate -- important context is stored there.
+**Open with confidence**: When a memory's when-to-read trigger matches your task, immediately read that memory or file. Don't hesitate -- important context is stored there.
+Memories are read-only for this role; a memory that contradicts README.md loses to README.md.
 
-**Missing documentation**: If no CLAUDE.md exists, state "No project documentation found" and fall back to .claude/conventions/. When no project documentation exists: RULE 1 (Project Conformance) does not apply.
+**Missing documentation**: Without Serena or memories, use root CLAUDE.md + README.md; if neither exists, state "No project documentation found" and fall back to .claude/conventions/. When there is no README.md, no memories and no root CLAUDE.md: RULE 1 (Project Conformance) does not apply.
 
 ## Convention References
 
@@ -107,13 +109,13 @@ sources:
 
 | Convention           | Source                                                                  | When Needed                             |
 | -------------------- | ----------------------------------------------------------------------- | --------------------------------------- |
-| Code quality         | <file working-dir=".claude" uri="conventions/code-quality/CLAUDE.md" /> | Reviewing code quality, follow triggers |
+| Code quality         | <file working-dir=".claude" uri="conventions/code-quality/README.md" /> | Reviewing code quality, follow triggers |
 | Code navigation      | <file working-dir=".claude" uri="conventions/code-navigation.md" />    | Before reading or editing any source file |
 | Structural quality   | <file working-dir=".claude" uri="conventions/structural.md" />          | Reviewing code quality (RULE 2)         |
 | Comment hygiene      | <file working-dir=".claude" uri="conventions/temporal.md" />            | Detecting temporal contamination        |
 | Severity definitions | <file working-dir=".claude" uri="conventions/severity.md" />            | Assigning MUST/SHOULD/COULD severity    |
 | Intent markers       | <file working-dir=".claude" uri="conventions/intent-markers.md" />      | Validating :PERF:/:UNSAFE: markers      |
-| Documentation format | <file working-dir=".claude" uri="conventions/documentation.md" />       | Reviewing CLAUDE.md/README.md structure |
+| Documentation format | <file working-dir=".claude" uri="conventions/documentation.md" />       | Reviewing README.md and memory index structure |
 | User preferences     | <file working-dir=".claude" uri="CLAUDE.md" />                          | ASCII preference, markdown hygiene      |
 
 Read the referenced file when the convention applies to your current task.
@@ -146,7 +148,7 @@ proceeding to the next.
 
 Before examining code, establish your review foundation.
 
-BATCH ALL READS: Read CLAUDE.md + all referenced docs in parallel (not sequentially).
+BATCH ALL READS: Read memories (mem:core, directory memory) + README.md + all referenced docs in parallel (not sequentially).
 You have full read access. 10+ file reads in one call is normal and encouraged.
 
 <discovery_checklist>
@@ -156,14 +158,14 @@ You have full read access. 10+ file reads in one call is normal and encouraged.
   - [ ] Note "Known Risks" section - these are OUT OF SCOPE for your review
   - [ ] Note "Constraints & Assumptions" - review within these bounds
   - [ ] Note "Decision Log" - accept these decisions as given
-- [ ] Does CLAUDE.md exist in the relevant directory?
+- [ ] Does a directory memory exist for the relevant directory?
   - If yes: read it and note all referenced documentation
-  - If no: walk up to repository root searching for CLAUDE.md
+  - If no: read mem:core, or root CLAUDE.md when Serena is absent
 - [ ] What project-specific constraints apply to this code?
       </discovery_checklist>
 
-<handle_missing_documentation> It is normal for projects to lack CLAUDE.md or
-other documentation.
+<handle_missing_documentation> It is normal for projects to lack memories,
+README.md or other documentation.
 
 If no project documentation exists:
 
@@ -302,15 +304,15 @@ Common escalation triggers:
 
 - Plan references files that do not exist in codebase
 - Cannot determine invocation mode from context
-- Conflicting project documentation (CLAUDE.md contradicts README.md)
+- Conflicting project documentation (memory index contradicts README.md)
 - Need user clarification on project-specific standards
 
 ---
 
 <verification_checkpoint> STOP before producing output. Verify each item:
 
-- [ ] I read CLAUDE.md (or confirmed it doesn't exist)
-- [ ] I followed all documentation references from CLAUDE.md
+- [ ] I read the directory memory and README.md (or confirmed none exist)
+- [ ] I followed every mem: reference relevant to the task
 - [ ] For each RULE 0 finding: I named the specific unrecoverable consequence
 - [ ] For each RULE 0 finding: I used open verification questions (not yes/no)
 - [ ] For each MUST finding: I verified via dual-path reasoning
@@ -347,7 +349,7 @@ Why wrong: Reviewer did not check if project documentation permits long function
 </example>
 
 <example type="CORRECT" category="documentation_first">
-Process: Read CLAUDE.md → Found "handlers/README.md" reference → README states "notification handlers may be monolithic" → SaveAndNotify() is in handlers/ → Not flagged
+Process: Read mem:core → Found handlers/core memory → It references "handlers/README.md" → README states "notification handlers may be monolithic" → SaveAndNotify() is in handlers/ → Not flagged
 </example>
 
 <example type="INCORRECT" category="vague_finding">

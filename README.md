@@ -35,23 +35,39 @@ Each task gets precisely the information it needs -- no more. Sub-agents start
 with a fresh context, so architectural knowledge must be encoded somewhere
 persistent.
 
-I use a two-file pattern in every directory:
+I use three layers:
 
-**CLAUDE.md** -- Claude loads these automatically when entering a directory.
-Because they load whether needed or not, content must be minimal: a tabular
-index with short descriptions and triggers for when to open each file. When
-Claude opens `app/web/controller.py`, it retrieves just the indexes along that
-path -- not prose it might never need.
+**Root CLAUDE.md** -- Loaded at launch. Build/test commands and a top-level
+index.
 
-**README.md** -- Invisible knowledge: architecture decisions, invariants not
-apparent from code. The test: if a developer could learn it by reading source
-files, it does not belong here. Claude reads these only when the CLAUDE.md
-trigger says to.
+**Project memories** -- Serena memories under `.serena/memories` are the
+navigation index: `mem:core` is the graph root and `<dir>/core` memories
+describe one directory each, named by the directory path relative to the
+Serena project root. Memory names arrive with Serena's `initial_instructions`
+and each memory is read on demand (~200 tokens each). Claude Code only
+auto-loads a nested CLAUDE.md when a host file tool touches that directory,
+which the Serena-first navigation policy never triggers; the memory graph
+makes discoverability explicit instead.
 
-The principle is just-in-time context. Indexes load automatically but stay
-small. Detailed knowledge loads only when relevant.
+**README.md** -- Committed invisible knowledge: architecture decisions,
+invariants not apparent from code (~500 tokens). The test: if a developer
+could learn it by reading source files, it does not belong here. Claude reads
+these only when a memory bullet says to. README.md wins over a memory on
+conflict.
 
-The technical writer agent enforces token budgets: ~200 tokens for CLAUDE.md,
+Exactly one writer updates the memories at a time: the technical writer's
+impl-docs pass, or the main session when bootstrapping. Memories are
+machine-local and gitignored (`.serena/` is untracked), so a fresh clone has
+no index until it is bootstrapped; a `mem:` pointer to a memory that does not
+exist is skipped, not an error. Root CLAUDE.md + README.md remain the baseline on hosts
+without Serena.
+
+The principle is just-in-time context. Only root CLAUDE.md loads
+automatically; memory names arrive with `initial_instructions` and each
+memory is read on demand. Indexes stay small and detailed knowledge loads
+only when relevant.
+
+The technical writer agent enforces token budgets: ~200 tokens per memory,
 ~500 for README.md, 100 for function docs, 150 for module docs. These limits
 force discipline -- if you are exceeding them, you are probably documenting what
 code already shows. Function docs include "use when..." triggers so the LLM
@@ -111,7 +127,7 @@ reimplemented fifteen times across a codebase. The quality reviewer catches
 this. The technical writer ensures documentation stays consistent.
 
 **LLM-navigable documentation.** Function docs include "use when..." triggers.
-CLAUDE.md files tell the LLM which files matter for a given task. The LLM stops
+Project memories tell the LLM which files matter for a given task. The LLM stops
 guessing which code is relevant.
 
 Is it better than writing code by hand? I think so, but I cannot speak for
@@ -358,31 +374,25 @@ Use your prompt engineer skill to optimize the system prompt for agents/develope
 
 The skill was optimized using itself.
 
-### Doc Sync
+### Memory Index Bootstrap
 
-The CLAUDE.md/README.md hierarchy requires maintenance. The structure changes
-over time. Documentation drifts.
+The memory index requires a starting point. A fresh clone has no memories
+until one is written.
 
-The doc-sync skill audits and synchronizes documentation across a repository.
-
-Use it when:
-
-- Bootstrapping the workflow on an existing repository
-- After major refactors or directory restructuring
-- Periodic audits to check for documentation drift
+In the main session, run Serena onboarding (`s.mem.onboarding`) or the
+codebase-analysis skill, whose synthesize step persists findings as
+memories. Before the first bootstrap on a workspace that already holds
+memories, list them (`s.mem.list_memories`) and treat any memory not
+reachable from `mem:core` afterwards as stale: delete it with
+`s.mem.delete_memory` after confirming, and keep `memory_maintenance`. Run
+`serena memories check` to find dangling references.
 
 If you use the planning workflow consistently, the technical writer agent
-handles documentation as part of execution. Doc-sync is primarily for
-bootstrapping or recovery.
+maintains the memories as part of execution. README.md audits are a manual
+task.
 
 ```
-Use your doc-sync skill to synchronize documentation across this repository
-```
-
-For targeted updates:
-
-```
-Use your doc-sync skill to update documentation in src/validators/
+Use your codebase-analysis skill to bootstrap project memories for this repository
 ```
 
 ### Web Fetch

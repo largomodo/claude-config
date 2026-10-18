@@ -170,6 +170,9 @@ DEEPEN_INSTRUCTIONS = (
 
 # --- STEP 4: SYNTHESIZE ------------------------------------------------------
 
+# This step runs in the main session, which is the permitted memory writer
+# (conventions/code-navigation.md Role Rules); sub-agents never run it.
+# Persisting here bootstraps a repository's memory index.
 SYNTHESIZE_INSTRUCTIONS = (
     "OUTPUT structured summary:\n"
     "\n"
@@ -194,7 +197,24 @@ SYNTHESIZE_INSTRUCTIONS = (
     "  - Summary addresses user's original intent\n"
     "  - All sections present with concrete findings\n"
     "  - Framing is understanding-focused (not auditing)\n"
-    "  - Facts and observations (not judgments)"
+    "  - Facts and observations (not judgments)\n"
+    "\n"
+    "PERSIST the findings when mcp__serena__serena_repl is available:\n"
+    "  1. s.mem.read_memory for mem:memory_maintenance (style rules), then\n"
+    "     s.mem.list_memories() and s.mem.read_memory('core') if present\n"
+    "  2. Name memories by directory path relative to the Serena project root\n"
+    "     (nearest .serena/ above the analyzed tree; subtree prefix when the\n"
+    "     repository sits inside a larger project) plus /core\n"
+    "  3. Write or edit mem:core and one <dir>/core memory per major directory\n"
+    "     from the Structure section: dense bullets (WHAT; read when <trigger>),\n"
+    "     README.md paths for invisible knowledge; s.mem.write_memory for absent\n"
+    "     memories, s.mem.edit_memory for present ones; stable, non-obvious\n"
+    "     facts only\n"
+    "  4. Stale graph: list every pre-existing memory that mem:core (directly or\n"
+    "     transitively) does not reference, print them as stale candidates with\n"
+    "     their topic folders, and ask the user before calling\n"
+    "     s.mem.delete_memory on any of them; never delete memory_maintenance\n"
+    "If Serena is unavailable, state so once and keep the summary in chat."
 )
 
 

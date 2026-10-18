@@ -65,16 +65,18 @@ def plan_scope_paths(plan: dict) -> dict[str, list[str]]:
 
 
 def _companions(plan: dict, scope: dict[str, list[str]]) -> list[str]:
-    """CLAUDE.md and README.md paths beside every scoped file, plus plan README entries.
+    """README.md paths beside every scoped file, plus plan README entries.
 
-    Called for docs-phase fix mode, where index and README updates accompany
-    code files and are not listed in any milestone.
+    Called for docs-phase fix mode, where README updates accompany code files
+    and are not listed in any milestone. The memory index is not a companion:
+    memory writes land in .serena/memories outside the git tree, so the scope
+    check never sees them.
     """
+    # Directories come from scoped files only, so unrelated READMEs stay out of scope.
     dirs = {posixpath.dirname(p) for paths in scope.values() for p in paths}
     found = set()
     for d in dirs:
-        for name in ("CLAUDE.md", "README.md"):
-            found.add(posixpath.join(d, name) if d else name)
+        found.add(posixpath.join(d, "README.md") if d else "README.md")
     # readme_entries[].path names a directory whose README.md the plan owns
     found.update(posixpath.join(r["path"], "README.md")
                  for r in plan.get("readme_entries", []) if r.get("path"))
@@ -176,8 +178,10 @@ def scope_check_commands(state_dir: str, phase: str, docs: bool = False,
     WHY shared: both fix scripts must give the same revert rule, and a
     divergent copy would let one revert paths the other keeps. docs=True adds
     --docs so the check counts documentation companions as in scope: docs-phase
-    fixes update CLAUDE.md and README.md files beside code, and no milestone
-    lists them, so without --docs the revert rule would delete valid doc edits.
+    fixes update README.md files beside code, and no milestone lists them, so
+    without --docs the revert rule would delete valid doc edits. Memory index
+    writes land in .serena/memories outside the git tree, so the check never
+    sees them.
 
     Called by fix-mode step 3 of exec_implement_qr_fix and exec_docs_qr_fix.
     """

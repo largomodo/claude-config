@@ -243,7 +243,7 @@ See `.claude/conventions/diff-format.md` for diff specification.
    more_existing_code()
 ```
 
-Documentation-only milestones (ALL files are .md, .rst, .txt, or CLAUDE.md):
+Documentation-only milestones (ALL files are .md, .rst or .txt, or the milestone is a memory index update):
 - Code Intent/Changes section states: "Documentation milestone - no code changes."
 - Milestone MUST have `Delegated to:` field (typically `@agent-technical-writer`)
 
@@ -257,7 +257,7 @@ Documentation-only milestones (ALL files are .md, .rst, .txt, or CLAUDE.md):
 
 **Files**:
 
-- `path/to/CLAUDE.md` (index updates -- in same directory as code)
+- `mem:core` and `<dir>/core` for each modified directory (memory index; not git-tracked)
 - `path/to/README.md` (if Invisible Knowledge section has content -- in same
   directory as code)
 
@@ -268,12 +268,13 @@ Delegate to Technical Writer. For documentation format specification:
 <file working-dir=".claude" uri="conventions/documentation.md" />
 
 Key deliverables:
-- CLAUDE.md: Pure navigation index (tabular format)
+- Memory index: bullets with WHAT/WHEN for each modified directory
 - README.md: Invisible knowledge (if IK section non-empty)
+  (memories are machine-local; README.md is the committed record)
 
 **Acceptance Criteria**:
 
-- CLAUDE.md is tabular index only (no prose sections)
+- A `<dir>/core` memory exists and is referenced from `mem:core` for every modified directory (or `Index: SKIPPED: no Serena` is reported)
 - README.md exists in each directory with invisible knowledge
 - README.md is self-contained (no external references)
 - Architecture diagrams in README.md match plan's Invisible Knowledge section

@@ -36,7 +36,8 @@ Focus on:
 
 OUT OF SCOPE (already verified in plan-docs phase):
   - Documentation quality (temporal contamination, WHY-not-WHAT)
-  - README/CLAUDE.md content
+  - README/memory index content
+  (impl-docs QR verifies the memory index after the technical-writer runs)
   - Invisible knowledge coverage"""
 
 

@@ -5,7 +5,8 @@ names and the facade methods Serena's REPL exposes (hardcoded here because
 CI has only pytest and hypothesis), the Python constants in
 skills.lib.workflow.prompts.serena, the tools: lists in agents/*.md, and the
 prose in conventions/code-navigation.md. Also guards that mode_main injects
-the right preamble variant at the right step, that orchestrator scripts
+the right preamble variant (read, edit or docs) at the right step, that
+orchestrator scripts
 never inject, that leaf scripts inject their own preamble, and that
 phrasing which routes code reads or edits around Serena is absent from
 skill scripts.
@@ -47,14 +48,17 @@ from skills.lib.workflow.prompts.serena import (
     SERENA_READ_METHODS,
     SERENA_EDIT_METHODS,
     SERENA_MEMORY_READ_METHODS,
+    SERENA_MEMORY_WRITE_METHODS,
     SERENA_SUBAGENT_DENIED_METHODS,
     SERENA_HOST_COVERED_METHODS,
     SERENA_READ_ROLE_RULE,
     SERENA_EDIT_ROLE_RULE,
+    SERENA_MEMORY_WRITE_RULE,
     SERENA_LOAD_HINT,
     SERENA_FALLBACK,
     SERENA_READ_PREAMBLE,
     SERENA_EDIT_PREAMBLE,
+    SERENA_DOCS_PREAMBLE,
 )
 
 
@@ -107,6 +111,7 @@ POLICY_METHODS = frozenset(
     SERENA_READ_METHODS
     + SERENA_EDIT_METHODS
     + SERENA_MEMORY_READ_METHODS
+    + SERENA_MEMORY_WRITE_METHODS
     + SERENA_SUBAGENT_DENIED_METHODS
     + SERENA_HOST_COVERED_METHODS
 )
@@ -194,11 +199,12 @@ def test_mcp_tools_match_real():
 
 
 def test_method_tuples_partition_real():
-    """The five method tuples are disjoint facade.method names; only cfg is unnamed."""
+    """The six method tuples are disjoint facade.method names; only cfg is unnamed."""
     groups = (
         SERENA_READ_METHODS,
         SERENA_EDIT_METHODS,
         SERENA_MEMORY_READ_METHODS,
+        SERENA_MEMORY_WRITE_METHODS,
         SERENA_SUBAGENT_DENIED_METHODS,
         SERENA_HOST_COVERED_METHODS,
     )
@@ -213,6 +219,13 @@ def test_method_tuples_partition_real():
     assert REAL_SERENA_FACADE_METHODS - seen == {
         "cfg.get_current_config",
         "cfg.open_dashboard",
+    }
+    assert set(SERENA_SUBAGENT_DENIED_METHODS) == {"mem.onboarding"}
+    assert set(SERENA_MEMORY_WRITE_METHODS) == {
+        "mem.write_memory",
+        "mem.edit_memory",
+        "mem.rename_memory",
+        "mem.delete_memory",
     }
 
 
@@ -304,7 +317,7 @@ def test_no_hallucinated_mcp_names():
 
 def test_preamble_methods_are_known():
     """Every s.<facade>.<method> name in a preamble is a policy method."""
-    for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE):
+    for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE, SERENA_DOCS_PREAMBLE):
         for match in FACADE_METHOD_PATTERN.finditer(preamble):
             entry = f"{match.group(1)}.{match.group(2)}"
             assert entry in POLICY_METHODS, f"Unknown method in preamble: {match.group(0)}"
@@ -336,21 +349,29 @@ def test_preambles_have_no_braces():
     assert "}" not in SERENA_READ_PREAMBLE
     assert "{" not in SERENA_EDIT_PREAMBLE
     assert "}" not in SERENA_EDIT_PREAMBLE
+    assert "{" not in SERENA_DOCS_PREAMBLE
+    assert "}" not in SERENA_DOCS_PREAMBLE
 
 
 def test_role_clauses_select_variant():
-    """Each preamble carries its own role clause and not the other's."""
+    """Each preamble carries its own role clause and not the other's; the
+    memory-write clause appears in the docs preamble alone."""
     assert SERENA_READ_ROLE_RULE in SERENA_READ_PREAMBLE
     assert SERENA_READ_ROLE_RULE not in SERENA_EDIT_PREAMBLE
+    assert SERENA_READ_ROLE_RULE not in SERENA_DOCS_PREAMBLE
     assert SERENA_EDIT_ROLE_RULE in SERENA_EDIT_PREAMBLE
     assert SERENA_EDIT_ROLE_RULE not in SERENA_READ_PREAMBLE
+    assert SERENA_EDIT_ROLE_RULE in SERENA_DOCS_PREAMBLE
+    assert SERENA_MEMORY_WRITE_RULE in SERENA_DOCS_PREAMBLE
+    assert SERENA_MEMORY_WRITE_RULE not in SERENA_READ_PREAMBLE
+    assert SERENA_MEMORY_WRITE_RULE not in SERENA_EDIT_PREAMBLE
     assert "no s.edit" in SERENA_READ_ROLE_RULE
 
 
 def test_preambles_contain_load_hint_and_fallback():
     """Each preamble carries its ToolSearch hint and the fallback clause,
     so the policy still works if Claude Code defers the MCP tools."""
-    for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE):
+    for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE, SERENA_DOCS_PREAMBLE):
         assert SERENA_LOAD_HINT in preamble
         assert SERENA_FALLBACK in preamble
     assert "ToolSearch" in SERENA_LOAD_HINT
@@ -375,16 +396,16 @@ def _stub_guidance(**extra):
     "script_file,expect",
     [
         ("/r/scripts/skills/planner/developer/exec_implement_execute.py", "edit"),
-        ("/r/scripts/skills/planner/technical_writer/exec_docs_qr_fix.py", "edit"),
+        ("/r/scripts/skills/planner/technical_writer/exec_docs_qr_fix.py", "docs"),
         ("/r/scripts/skills/planner/developer/plan_code_execute.py", "read"),
         ("/r/scripts/skills/planner/technical_writer/plan_docs_execute.py", "read"),
         ("/r/scripts/skills/planner/architect/plan_design_execute.py", "read"),
     ],
 )
 def test_mode_main_injection(monkeypatch, capsys, script_file, expect):
-    """Step 1 injects the edit variant only for exec_* scripts of the
-    developer and technical_writer packages; every other script gets the
-    read variant."""
+    """Step 1 injects the edit variant for developer exec_* scripts and the
+    docs variant (edit plus memory-write clause) for technical_writer exec_*
+    scripts; every other script gets the read variant."""
     from skills.lib.workflow.cli import mode_main
 
     monkeypatch.setattr(sys, "argv", ["x", "--step", "1"])
@@ -393,9 +414,14 @@ def test_mode_main_injection(monkeypatch, capsys, script_file, expect):
 
     if expect == "edit":
         assert out.count(SERENA_EDIT_PREAMBLE) == 1
+        assert SERENA_DOCS_PREAMBLE not in out
+    elif expect == "docs":
+        assert out.count(SERENA_DOCS_PREAMBLE) == 1
+        assert SERENA_EDIT_PREAMBLE not in out
     else:
         assert SERENA_READ_PREAMBLE in out
         assert SERENA_EDIT_PREAMBLE not in out
+        assert SERENA_DOCS_PREAMBLE not in out
 
 
 def test_mode_main_injection_step_2_neither(monkeypatch, capsys):
@@ -426,6 +452,59 @@ def test_mode_main_injection_dispatch_to_neither(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert SERENA_READ_PREAMBLE not in out
     assert SERENA_EDIT_PREAMBLE not in out
+
+
+# =============================================================================
+# Single-writer premise of the memory-write grant
+# =============================================================================
+
+
+def test_impl_docs_dispatch_is_single_writer(tmp_path):
+    """Executor step 6 dispatches exactly one technical-writer.
+
+    The memory-write grant in conventions/code-navigation.md holds only
+    while the impl-docs pass is the sole memory writer. A parallel dispatch
+    here, or a technical_writer script that spawns its own sub-agent, would
+    let two writers race on shared memory and silently void the grant.
+    """
+    from skills.planner.orchestrator.executor import get_step_guidance
+
+    guidance = get_step_guidance(6, None, state_dir=str(tmp_path))
+    rendered = "\n".join(str(action) for action in guidance["actions"])
+    assert rendered.count("subagent_type:") == 1
+    assert rendered.count("subagent_type: technical-writer") == 1
+    assert "PARALLEL" not in rendered
+    assert "multiple Task calls" not in rendered
+
+    tw_dir = SKILLS_DIR / "planner" / "technical_writer"
+    for path in list(tw_dir.glob("exec_docs*.py")) + list(tw_dir.glob("plan_docs*.py")):
+        text = path.read_text()
+        assert "subagent_dispatch" not in text, path
+        assert "Task(" not in text, path
+
+
+def test_impl_docs_route_returns_to_step_6(tmp_path):
+    """A blocking impl-docs QR failure routes step 9 back to step 6.
+
+    Fix mode re-enters the same single technical-writer dispatch, which is
+    why one memory writer exists at any time; routing the fix to another
+    agent would add a second writer.
+    """
+    import json
+
+    from skills.planner.orchestrator.executor import get_step_guidance
+
+    qr_state = {
+        "iteration": 1,
+        "items": [{"id": "qr-1", "status": "FAIL", "severity": "MUST"}],
+    }
+    (tmp_path / "qr-impl-docs.json").write_text(json.dumps(qr_state))
+
+    gate = get_step_guidance(9, "fail", state_dir=str(tmp_path))
+    output = gate.output
+    assert "executor --step 6" in output
+    assert "technical-writer" in output
+    assert "developer" not in output
 
 
 def test_orchestrators_do_not_inject():

@@ -1,9 +1,9 @@
 """CLI utilities for workflow scripts.
 
 Handles argument parsing and mode script entry points. mode_main() also
-injects the Serena REPL policy preamble on step 1, choosing between a
-read-only and an edit-capable role clause based on the calling script's
-module path; router scripts that hand off to another script's step 1 are skipped
+injects the Serena REPL policy preamble on step 1, choosing between the
+read, edit and docs variants based on the calling script's module path;
+router scripts that hand off to another script's step 1 are skipped
 so the preamble is not printed twice in the same sub-agent turn.
 
 Orchestrator scripts (planner.py, executor.py) never call mode_main() and
@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Callable
 
 from .prompts.step import format_step
-from .prompts.serena import SERENA_EDIT_PREAMBLE, SERENA_READ_PREAMBLE
+from .prompts.serena import (
+    SERENA_DOCS_PREAMBLE,
+    SERENA_EDIT_PREAMBLE,
+    SERENA_READ_PREAMBLE,
+)
 from .types import UserInputResponse
 
 
@@ -54,9 +58,12 @@ def _compute_module_path(script_file: str) -> str:
 def _serena_preamble_for(module_path: str) -> str:
     """Select the Serena preamble variant for a mode script's module path.
 
-    The edit variant (SERENA_EDIT_ROLE_RULE) applies only when the module is
-    an exec_* script of the developer or technical_writer role package --
-    those are the only scripts that modify source files. Every other
+    The edit variant (SERENA_EDIT_ROLE_RULE) applies when the module is an
+    exec_* script of the developer role package; the docs variant adds the
+    memory-write clause for exec_* scripts of the technical_writer package.
+    Those are the only scripts that modify source files. The docs variant
+    carries the memory-write clause because the impl-docs dispatch is
+    single-writer while developer exec_* runs are wave-parallel. Every other
     script, including the planning-only plan_code_* and plan_docs_* scripts
     of the same two roles, gets the read variant, whose clause forbids
     s.edit, s.fs.create_text_file and s.shell.
@@ -65,7 +72,9 @@ def _serena_preamble_for(module_path: str) -> str:
     role = parts[-2] if len(parts) >= 2 else ""
     leaf = parts[-1] if parts else ""
     # debugger has no planner package, so it never reaches this selection.
-    if role in ("developer", "technical_writer") and leaf.startswith("exec_"):
+    if role == "technical_writer" and leaf.startswith("exec_"):
+        return SERENA_DOCS_PREAMBLE
+    if role == "developer" and leaf.startswith("exec_"):
         return SERENA_EDIT_PREAMBLE
     return SERENA_READ_PREAMBLE
 

@@ -2,6 +2,16 @@
 
 Script-based agent workflows with shared orchestration framework.
 
+## Script Invocation
+
+All Python skill scripts are invoked as modules from `skills/scripts/`:
+
+<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.<skill_name>.<module> --step 1" />
+
+Example:
+
+<invoke working-dir=".claude/skills/scripts" cmd="python3 -m skills.problem_analysis.analyze --step 1" />
+
 ## File Organization: The "Book" Pattern
 
 Skill files read top-to-bottom like a book. Dependencies are defined before use. The ordering principle: **a reader should never need to scroll up to understand what they're reading.**

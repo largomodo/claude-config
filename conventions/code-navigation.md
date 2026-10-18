@@ -36,6 +36,8 @@ cell against the entrypoint `s`, whose facades are `s.lsp`, `s.edit`,
   agents overwrite each other's variables.
 - `s.info("lsp")` and `s.info("edit.replace_content")` document signatures
   on demand.
+- The memory name list in the `initial_instructions` result is the entry
+  point to the memory index.
 - One `serena_repl` call per logical step: map a file, read the symbol and
   filter the result in one cell rather than one call per operation.
 - Methods with `max_answer_chars` cap their output; narrow the query rather
@@ -71,15 +73,44 @@ can extract names with one regex.
 
 ### Memory
 
-| Operation                | Use when                                          |
-| ------------------------ | ------------------------------------------------- |
-| `s.mem.list_memories`    | See what project knowledge the main session saved |
-| `s.mem.read_memory`      | Read one memory                                   |
+Memory Reads:
 
-Memories (`.serena/memories/`) are project knowledge written by the main
-session. Sub-agents read them but never write them: parallel sub-agents
-writing the same memory would race. Memories are Tier 3 knowledge, below
-CLAUDE.md and README.md.
+| Operation                | Use when                                                                 |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `s.mem.list_memories`    | See memory names (they also arrive with `initial_instructions`); list a topic to see one directory's memories |
+| `s.mem.read_memory`      | Read `mem:core` first, then the `<dir>/core` memory the referring text points to |
+
+Memory Writes:
+
+| Operation                | Use when                                                                 |
+| ------------------------ | ------------------------------------------------------------------------ |
+| `s.mem.write_memory`     | technical-writer exec_docs_* runs only: update `<dir>/core` and the `mem:core` reference for each modified directory |
+| `s.mem.edit_memory`      | Same grant as `s.mem.write_memory`                                       |
+| `s.mem.rename_memory`    | Same grant as `s.mem.write_memory`                                       |
+| `s.mem.delete_memory`    | Same grant as `s.mem.write_memory`                                       |
+
+Memories (`.serena/memories/`) are the project's navigation index: Tier 2
+beside root CLAUDE.md and README.md when Serena is present. Claude Code loads
+a nested CLAUDE.md only when a host tool (Read, Write, Edit, or a
+single-file cat/head) touches a file in that directory, and `serena_repl`
+calls never trigger it, so a Serena-first workflow cannot rely on nested
+CLAUDE.md files for discoverability. `mem:core` is the graph root; memory
+names are listed by `initial_instructions`, so every agent sees them at no
+extra cost. Inside Tier 2 the committed README.md wins over memory content on
+conflict, because memories are machine-local and may be stale. Memories are
+gitignored, so a fresh clone has no index until bootstrap. When memories
+are absent, root CLAUDE.md + README.md are the knowledge source; a `mem:`
+pointer to a memory that does not exist is skipped, not an error.
+
+Memory style follows Serena's built-in `mem:memory_maintenance`: dense
+bullets, `mem:name` references in backticks with the when-to-read guidance in
+the referring text, topic folders mirroring paths.
+
+Naming rule: a directory memory is named by the directory's path relative to
+the Serena project root (the directory holding `.serena/`) plus `/core`, so a
+repository that is a subtree of the project carries the subtree prefix
+(`claude-config/skills/planner/core`). Writers find the root by walking up
+from the modified directory to the nearest `.serena/`.
 
 ## Rules
 
@@ -110,17 +141,26 @@ CLAUDE.md and README.md.
 | quality-reviewer  | Read-only: same restrictions as architect               |
 | developer         | Edit-capable                                            |
 | debugger          | Edit-capable                                            |
-| technical-writer  | Edit-capable                                            |
+| technical-writer  | Edit-capable; memory writer during impl-docs (`exec_docs_execute.py`, `exec_docs_qr_fix.py`) |
 
-Every role reads memories only. Sub-agents never call `s.mem.write_memory`,
-`s.mem.edit_memory`, `s.mem.rename_memory`, `s.mem.delete_memory` or
-`s.mem.onboarding`; parallel sub-agents writing shared project memory would
-race and corrupt it.
+Exactly one memory writer exists at any time. The technical-writer impl-docs
+pass qualifies: `executor.py` step 6 (`execute_dispatch_step`) emits one
+technical-writer dispatch after impl-code QR passes, step 9 (`qr_route_step`,
+`work_step=6`, `fix_target=TECHNICAL_WRITER`) re-enters that same single
+dispatch in fix mode, the orchestrating main session blocks on the Task call
+and issues no memory writes meanwhile, and the `exec_docs_*` scripts spawn no
+sub-agents. `tests/test_serena_policy.py` pins this shape
+(`test_impl_docs_dispatch_is_single_writer`), so any parallelization of step 6
+fails the suite and must revisit the grant. Every other sub-agent reads
+memories only; parallel sub-agents writing shared project memory would race
+and corrupt it. No sub-agent calls `s.mem.onboarding`: it is a main-session
+bootstrap, run at most once per conversation.
 
 `serena_repl` is one fully privileged tool, so an allowlist cannot withhold
 editing or memory writes from a role. These rules are instruction, not
 enforcement. The step-1 preamble (`SERENA_READ_ROLE_RULE` /
-`SERENA_EDIT_ROLE_RULE`) carries them into every scripted run; debugger has
+`SERENA_EDIT_ROLE_RULE` / `SERENA_DOCS_PREAMBLE`, the edit rule plus
+`SERENA_MEMORY_WRITE_RULE`) carries them into every scripted run; debugger has
 no planner package and relies on this document.
 
 The read-only clause is written out as an explicit prohibition for the same
@@ -162,7 +202,7 @@ a loop.
 | quality-reviewer  | none                             | Reviews, does not touch source files |
 | developer         | `Edit`, `Agent`                  | Implements; `Agent` (not the legacy `Task` alias -- DL-014) for wave-parallel sub-agent dispatch |
 | debugger          | `Edit`, `TodoWrite`              | Fixes bugs in place; `TodoWrite` because its steps require every modification logged before it is made and verified against that log at cleanup |
-| technical-writer  | `Edit`                           | Fixes source comments during documentation passes |
+| technical-writer  | `Edit`                           | Fixes source comments and writes the memory index during documentation passes |
 
 Every role keeps `Read`, `Glob`, `Grep`, `Bash`, `Write` and `ToolSearch`.
 Glob and Grep are the discovery tools, but some permission modes expose no
@@ -197,13 +237,15 @@ transcript, while a `serena_repl` call shows only its code.
 
 `skills/lib/workflow/prompts/serena.py` mirrors this document as Python
 constants (`SERENA_MCP_TOOLS`, `SERENA_READ_METHODS`, `SERENA_EDIT_METHODS`,
-`SERENA_MEMORY_READ_METHODS`, `SERENA_SUBAGENT_DENIED_METHODS`,
-`SERENA_HOST_COVERED_METHODS`) because sub-agents driven by planner scripts
-obey the script's stdout during a run, not this file's prose.
+`SERENA_MEMORY_READ_METHODS`, `SERENA_MEMORY_WRITE_METHODS`,
+`SERENA_SUBAGENT_DENIED_METHODS`, `SERENA_HOST_COVERED_METHODS`) because
+sub-agents driven by planner scripts obey the script's stdout during a run,
+not this file's prose.
 Sections map one-to-one onto the constants: Sub-Agent Grants onto
 `SERENA_MCP_TOOLS`, Operation Map and Host-Covered Operations onto the
-method tuples, Role Rules onto the role clauses. The sync test and a human
-reader therefore see the same structure.
+method tuples (Memory Writes onto `SERENA_MEMORY_WRITE_METHODS`), Role Rules
+onto the role clauses (the technical-writer row onto `SERENA_DOCS_PREAMBLE`).
+The sync test and a human reader therefore see the same structure.
 Operations are named `s.<facade>.<method>` because that is how Serena's
 own manual names them, and one regex over that form needs no YAML parser
 and no Serena import, neither of which CI provides.

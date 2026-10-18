@@ -2,7 +2,7 @@
 """QR decomposition for impl-docs phase.
 
 Scope: Post-implementation documentation.
-  - CLAUDE.md format (tabular index)
+  - Memory index coverage and style (mem:core graph, <dir>/core memories)
   - IK proximity audit (docs adjacent to code)
   - Temporal contamination in comments
   - README.md creation criteria
@@ -21,8 +21,17 @@ STEP_1_ABSORB = """\
 Read plan.json from STATE_DIR:
   cat $STATE_DIR/plan.json | jq '.'
 
+Memory reads are read-only here: the technical-writer is the memory writer.
+
+Also read the memory index via mcp__serena__serena_repl (read-only):
+  - s.mem.list_memories()
+  - s.mem.read_memory('core')
+  - s.mem.read_memory('<dir>/core') for each modified directory
+    (name = directory path relative to the Serena project root + /core)
+If Serena is unavailable, record 'memory index unverifiable: no Serena'
+and generate no memory items.
+
 Also read documentation files in modified directories:
-  - CLAUDE.md files
   - README.md files
   - Comments in source files
 
@@ -31,7 +40,7 @@ SCOPE: Post-implementation documentation quality.
 Focus on:
   - invisible_knowledge section (was it transferred?)
   - Modified directory list (need docs?)
-  - CLAUDE.md format compliance
+  - Memory index coverage and style
   - README.md presence where required
 
 OUT OF SCOPE:
@@ -41,7 +50,9 @@ OUT OF SCOPE:
 
 STEP_2_CONCERNS = """\
 Brainstorm concerns specific to POST-IMPL DOCUMENTATION:
-  - CLAUDE.md missing or wrong format (tabular index required)
+  - Directory memory missing or not referenced from mem:core
+  - Memory bullet lacking WHAT or a task-based trigger
+  - When-to-read stated inside a memory instead of the referring bullet
   - IK not at best location (should be adjacent to code)
   - Temporal contamination in comments
   - README.md missing where required
@@ -55,7 +66,7 @@ For impl-docs, enumerate DOCUMENTATION ARTIFACTS:
 
 DIRECTORIES:
   - Each directory with modified files (directory path)
-  - CLAUDE.md exists? Format correct?
+  - Memory <dir>/core exists? Referenced from mem:core?
   - README.md exists where required?
 
 INVISIBLE KNOWLEDGE:
@@ -76,7 +87,7 @@ SEVERITY ASSIGNMENT (per conventions/severity.md, impl-docs scope):
     - BASELINE_REFERENCE: comment references removed code
 
   SHOULD (iterations 1-4):
-    - CLAUDE.md format violations
+    - Memory index gaps and style violations
     - README.md missing where scope warrants
     - WHY-not-WHAT violations
 
@@ -87,7 +98,7 @@ SEVERITY ASSIGNMENT (per conventions/severity.md, impl-docs scope):
 
 COMPONENT_EXAMPLES = """\
   - A modified directory
-  - A CLAUDE.md file
+  - A <dir>/core memory
   - A README.md file"""
 
 

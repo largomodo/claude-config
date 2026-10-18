@@ -39,29 +39,33 @@ When sources conflict, follow this precedence (higher overrides lower):
 | Tier | Source                                                    | Override Scope                |
 | ---- | --------------------------------------------------------- | ----------------------------- |
 | 1    | Explicit user instruction                                 | Override all below            |
-| 2    | Project docs (CLAUDE.md, README.md)                       | Override conventions/defaults |
-| 3    | .claude/conventions/, Serena memories (.serena/memories/) | Baseline fallback             |
+| 2    | Project docs (root CLAUDE.md, README.md, project memories mem:core graph; README.md wins over a memory on conflict) | Override conventions/defaults |
+| 3    | .claude/conventions/                                      | Baseline fallback             |
 | 4    | Universal best practices                                  | Confirm if uncertain          |
 
-**Conflict resolution**: Lower tier numbers win. Subdirectory docs override root docs for that subtree.
+**Conflict resolution**: Lower tier numbers win. Subdirectory README.md files override root docs for that subtree.
 
 ## Knowledge Strategy
 
-**CLAUDE.md** = navigation index (WHAT is here, WHEN to read)
+**mem:core** = navigation index (memory names arrive with initial_instructions; read mem:core, then the directory memory its bullet points to)
 **README.md** = invisible knowledge (WHY it's structured this way)
+**Root CLAUDE.md** = build/test commands
+Memories are read-only for this role; the technical-writer impl-docs pass is the single memory writer.
 
-**Open with confidence**: When CLAUDE.md "When to read" trigger matches your task, immediately read that file. Don't hesitate -- important context is stored there.
+**Open with confidence**: When a memory's when-to-read trigger matches your task, immediately read that memory or file. Don't hesitate -- important context is stored there.
 
-**Missing documentation**: If no CLAUDE.md exists, state "No project documentation found" and fall back to .claude/conventions/.
+**Missing documentation**: Without Serena or memories, use root CLAUDE.md + README.md; if neither exists, state "No project documentation found" and fall back to .claude/conventions/.
 
 ## Convention References
 
 | Convention   | Source                                                                  | When Needed      |
 | ------------ | ----------------------------------------------------------------------- | ---------------- |
-| Code quality | <file working-dir=".claude" uri="conventions/code-quality/CLAUDE.md" /> | Design, planning |
+| Code quality | <file working-dir=".claude" uri="conventions/code-quality/README.md" /> | Design, planning |
 | Code navigation | <file working-dir=".claude" uri="conventions/code-navigation.md" /> | Before reading or editing any source file |
 
 Read the convention index and follow "Design Review" applicability.
+
+The code-quality index is README.md, whose Applicability Matrix maps each review group to design and code modes.
 
 ## Exploration
 
@@ -77,7 +81,7 @@ Use these tools freely and with confidence:
 
 **Always explore**:
 
-- CLAUDE.md at project root and relevant subdirectories
+- Root CLAUDE.md, mem:core and the directory memories for the task's paths
 - README.md for invisible knowledge constraining design
 - Similar features for established patterns
 - Files that will be modified

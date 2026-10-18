@@ -60,8 +60,10 @@ After planning completes and context clears (`/clear`), execution proceeds:
 | Milestone Execution    | Delegate to agents, run tests; repeat until all complete        |
 | Post-Implementation QR | Quality review of implemented code                              |
 | Issue Resolution       | (conditional) Present issues, collect decisions, delegate fixes |
-| Documentation          | Technical writer updates CLAUDE.md/README.md                    |
+| Documentation          | Technical writer updates README.md and the memory index         |
 | Retrospective          | Present execution summary                                       |
+
+Memory index updates need Serena; without it the documentation step updates README.md only.
 
 I designed the coordinator to never write code directly -- it delegates to
 developers. Separating coordination from implementation produces cleaner

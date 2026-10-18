@@ -111,18 +111,36 @@ tokens.
 `mode_main()` also injects the Serena REPL policy preamble on step 1,
 skipping router hand-offs (guidance carrying `dispatch_to`) because the
 execute script's own step 1 injects in the same sub-agent turn. Both
-variants share `SERENA_POLICY` and differ only in the role clause:
-`SERENA_EDIT_ROLE_RULE` goes to `exec_*` scripts of the `developer` and
-`technical_writer` packages (the `plan_*` scripts of those same roles are
-planning-only), `SERENA_READ_ROLE_RULE` to every other script. The clause
-exists because `serena_repl` is one tool for every operation, so only prose
+preambles share `SERENA_POLICY` and differ only in the role clauses:
+`SERENA_EDIT_PREAMBLE` (`SERENA_EDIT_ROLE_RULE`) goes to `exec_*` scripts of
+the `developer` package, `SERENA_DOCS_PREAMBLE` (`SERENA_EDIT_ROLE_RULE` plus
+`SERENA_MEMORY_WRITE_RULE`) to `exec_*` scripts of the `technical_writer`
+package, and `SERENA_READ_PREAMBLE` (`SERENA_READ_ROLE_RULE`) to every other
+script, including the planning-only `plan_*` scripts of those two roles.
+`_serena_preamble_for` in cli.py makes the selection. The clause exists
+because `serena_repl` is one tool for every operation, so only prose
 can keep a read-only role from editing. Orchestrator scripts (`planner.py`,
 `executor.py`) never call `mode_main()` and never inject a preamble; they
 carry `ORCHESTRATOR_CONSTRAINT` (`skills.planner.shared.constraints`)
-instead. Both variants end with `SERENA_LOAD_HINT`
+instead. All three preambles end with `SERENA_LOAD_HINT`
 and `SERENA_FALLBACK`; the fallback fires when `mcp__serena__serena_repl` is
 unavailable, so a sub-agent in a project where Serena is not configured
 drops to Read/Grep/Edit and says so once.
+
+Memory access is tuple-driven: `SERENA_MEMORY_READ_METHODS`
+(`mem.list_memories`, `mem.read_memory`) is part of `SERENA_POLICY` for every
+role; `SERENA_MEMORY_WRITE_METHODS` (`mem.write_memory`, `mem.edit_memory`,
+`mem.rename_memory`, `mem.delete_memory`) appears only through
+`SERENA_MEMORY_WRITE_RULE` in `SERENA_DOCS_PREAMBLE`. The docs preamble is a
+separate precomposed constant rather than a memory clause inside
+`SERENA_EDIT_PREAMBLE` because developer `exec_*` runs share the edit
+preamble and execute wave-parallel: a memory-write grant there would let
+parallel agents race on shared memory. The impl-docs dispatch is the single
+memory writer. The shared lib holds constants only, so the selection lives in
+cli.py and no per-role logic enters `prompts/`. `serena_repl` cannot withhold
+write methods from a role, so the grant exists only as preamble prose and in
+`conventions/code-navigation.md`, which a test keeps in lockstep with the
+tuples.
 
 Each sub-agent obtains its own session id from `initial_instructions`: the
 REPL namespace persists per id, so a shared id would let parallel sub-agents

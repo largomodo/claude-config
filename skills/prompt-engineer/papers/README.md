@@ -218,6 +218,10 @@ metadata:
   also_useful_for: [reasoning, correctness, context, efficiency, structure]
 ```
 
+## File Naming
+
+Paper files are named by date and title (e.g., `2024-04-18 Rephrase and Respond...`, `2023-10-23 Program of Thoughts Prompting...`). `claude-prompt-engineering.md` (in `context/reframing/` and `structure/`) is Anthropic's official prompting guide, not a dated paper.
+
 ## Historical Context
 
 This taxonomy replaces the original execution-topology organization (single-turn, multi-turn, subagent, agentic, hitl, compression) which had high cross-category overlap because execution topology is orthogonal to problem type.

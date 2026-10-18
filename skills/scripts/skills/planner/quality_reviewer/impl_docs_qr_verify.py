@@ -42,7 +42,16 @@ class ImplDocsVerify(VerifyBase):
                 f"  Read plan.json for IK and modified files:",
                 f"    cat {state_dir}/plan.json | jq '{{ik: .invisible_knowledge, milestones: .milestones[].files}}'",
                 "",
-                "  Read CLAUDE.md and README.md files in modified directories.",
+                # QR is read-only on memories: the technical-writer is the one
+                # memory writer, and a second writer here would race with it.
+                "  Read the memory index via mcp__serena__serena_repl (read-only):",
+                "    s.mem.read_memory('core') and the <dir>/core memory of each",
+                "    modified directory (name = directory path relative to the Serena",
+                "    project root + /core; a repository that is a subtree of that root",
+                "    carries the subtree prefix, e.g. claude-config/skills/planner/core).",
+                "  If Serena is unavailable, skip the memory reads and verify against",
+                "  README.md and the root CLAUDE.md instead.",
+                "  Read README.md files in modified directories.",
                 "",
             ])
         elif scope.startswith("directory:"):
@@ -50,7 +59,11 @@ class ImplDocsVerify(VerifyBase):
             guidance.extend([
                 f"DIRECTORY CHECK - Focus on {directory}:",
                 "",
-                f"  Read CLAUDE.md: cat {directory}/CLAUDE.md",
+                f"  Read the memory via mcp__serena__serena_repl (read-only): name = {directory}",
+                "  relative to the Serena project root + /core (a repository that is a",
+                "  subtree of that root carries the subtree prefix, e.g.",
+                "  claude-config/skills/planner/core); pass it to s.mem.read_memory.",
+                "  If Serena is unavailable, skip the memory read and use README.md instead.",
                 f"  Read README.md: cat {directory}/README.md (if exists)",
                 "",
             ])
@@ -63,31 +76,27 @@ class ImplDocsVerify(VerifyBase):
             ])
 
         # Add check-specific guidance
-        if "claude.md" in check.lower() and "tabular" in check.lower():
+        if "memory" in check.lower() and "exists" in check.lower():
             guidance.extend([
-                "CLAUDE.MD FORMAT CHECK:",
-                "  Must use tabular index format:",
-                "  | File | Contents (WHAT) | Read When (WHEN) |",
-                "  | ---- | --------------- | ---------------- |",
-                "  - FAIL if prose instead of table",
-                "  - FAIL if overview >1 sentence",
+                "MEMORY EXISTENCE CHECK:",
+                "  - FAIL if a modified directory has no <dir>/core memory",
+                "  - FAIL if mem:core has no bullet referencing <dir>/core",
+                "  If Serena is unavailable, report 'memory index unverifiable: no Serena'.",
                 "",
             ])
-        elif "forbidden section" in check.lower():
+        elif "memory" in check.lower() and "style" in check.lower():
             guidance.extend([
-                "FORBIDDEN SECTIONS CHECK:",
-                "  CLAUDE.md must NOT have:",
-                "  - 'Key Invariants' section",
-                "  - 'Dependencies' section",
-                "  - 'Constraints' section",
-                "  These belong in README.md, not CLAUDE.md.",
+                "MEMORY STYLE CHECK:",
+                "  - FAIL if a memory states when to read itself",
+                "  - FAIL if a memory uses prose paragraphs instead of dense bullets",
+                "  - FAIL if a mem: reference lacks a when-to-read in the referring text",
                 "",
             ])
-        elif "overview" in check.lower() and "one sentence" in check.lower():
+        elif "trigger" in check.lower():
             guidance.extend([
-                "OVERVIEW LENGTH CHECK:",
-                "  CLAUDE.md overview must be ONE sentence max.",
-                "  Count sentences in Overview section.",
+                "TRIGGER CHECK:",
+                "  Each file bullet must carry a task-based WHEN",
+                "  (action verbs: debugging, adding, modifying).",
                 "",
             ])
         elif "temporal" in check.lower():

@@ -4,7 +4,8 @@ Conventions are universal rules used by agents and skills. They live in
 .claude/conventions/ (not skill-specific resources directories).
 
 Available conventions:
-- documentation.md: CLAUDE.md/README.md format specification
+- documentation.md: root CLAUDE.md, memory index and README.md specification
+  (single authoritative format spec for all skills)
 - structural.md: Code quality conventions (god object, testing, etc.)
 - temporal.md: Comment hygiene (timeless present rule)
 - severity.md: MUST/SHOULD/COULD severity definitions

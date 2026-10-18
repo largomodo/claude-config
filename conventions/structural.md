@@ -9,9 +9,11 @@ Higher tiers override lower. Cite backing source when auditing.
 | Tier | Source          | Action                           |
 | ---- | --------------- | -------------------------------- |
 | 1    | user-specified  | Explicit user instruction: apply |
-| 2    | doc-derived     | CLAUDE.md / project docs: apply  |
+| 2    | doc-derived     | Root CLAUDE.md, README.md, project memories: apply |
 | 3    | default-derived | This document: apply             |
 | 4    | assumption      | No backing: CONFIRM WITH USER    |
+
+README.md wins over a memory on conflict.
 
 ## Severity Levels
 
