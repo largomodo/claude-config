@@ -9,6 +9,7 @@ Claude Code configuration: agents, skills, conventions, and output styles for a 
 | `README.md`  | Workflow philosophy, principles, quick start | Understanding the workflow, onboarding    |
 | `LICENSE`    | License terms                               | Checking usage rights                     |
 | `.gitignore` | Allowlist-based tracking (ignore by default) | Adding new tracked directories or files   |
+| `claude-env.md` | Untracked; written at container start by claude-env's init-workspace.sh with the container's toolchain index; absent on plain hosts | Never edit or track; imported by the Environment section |
 
 ## Subdirectories
 
@@ -25,3 +26,7 @@ Claude Code configuration: agents, skills, conventions, and output styles for a 
 ```bash
 cd skills/scripts && pytest tests/ -v
 ```
+
+## Environment
+
+@claude-env.md

@@ -400,3 +400,22 @@ Read https://example.com/docs/getting-started and summarize the setup steps
 
 The tool is installed by the container image, not this repo. Outside a
 container the skill falls back to `uvx trafilatura`.
+
+## Container Environments
+
+claude-env containers clone this repo into `~/.claude` and write an
+untracked `~/.claude/claude-env.md` describing the image's toolchain.
+`CLAUDE.md` imports it with a relative `@claude-env.md` so every session
+and every custom sub-agent sees the container's tools, env vars and MCP
+servers. On plain hosts, and in any other loaded copy of `CLAUDE.md` (a
+project-level `.claude/` clone, for example), the file is absent and the
+import is a no-op. Content is owned by claude-env (`resources/tools/`);
+this repo owns only the hook line.
+
+Invariants: never add `claude-env.md` to the `.gitignore` allowlist or
+commit it -- the container's `git pull --rebase` would fail on every
+launch. Keep exactly one import line and keep it relative. On an upstream
+merge conflict in `CLAUDE.md`, re-apply the Files-table row and the
+import line. Verify with `/memory` inside a container.
+
+`/memory` confirms the import path resolved, not that its content is current: the file is a build artifact of a claude-env image, so a container running an older image can carry a stale toolchain list even though the import itself works.
