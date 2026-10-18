@@ -10,8 +10,8 @@
   6. Milestone Definition & Plan Writing
 
 Step 2's wording follows the Serena-first navigation policy: Glob/Grep
-locate candidates, Serena's symbol tools read the actual code, and Read
-stays reserved for non-code files.
+locate candidates, Serena's s.lsp reads through serena_repl read the actual
+code, and Read stays reserved for non-code files.
 
 This is the EXECUTE script for first-time plan creation.
 For QR fix mode, see plan_design_qr_fix.py.
@@ -105,7 +105,8 @@ def get_step_guidance(
             "actions": [
                 "STEP 2: CODEBASE EXPLORATION",
                 "",
-                "Discover with Glob/Grep, then read symbols with Serena (see tool policy above):",
+                # Read-only role: symbol reads only, per the read preamble.
+                "Discover with Glob/Grep, then read symbols with Serena (see REPL policy above):",
                 "  - Existing patterns and implementations",
                 "  - Constraints from code structure",
                 "  - Conventions to follow",

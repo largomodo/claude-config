@@ -10,10 +10,10 @@ Four-step workflow:
 
 Only DEEPEN iterates based on confidence. Other steps execute once and advance.
 
-DEEPEN's exploration wording points at Serena's symbol tools for code reads.
-This main-session script does not prepend a Serena preamble the way
-subagent.py does, because the main session already carries Serena's tool
-instructions from its own manual.
+DEEPEN's exploration wording points at Serena's s.lsp reads
+(serena_repl) for code reads. This main-session script does not prepend a
+Serena preamble the way subagent.py does, because the main session already
+carries Serena's manual from its own initial_instructions call.
 """
 
 import argparse
@@ -129,7 +129,7 @@ SURVEY_PROCESSING_INSTRUCTIONS = (
 DEEPEN_INSTRUCTIONS = (
     "DEEPEN understanding through direct exploration.\n"
     "\n"
-    "DO NOT dispatch agents. Explore directly: Glob/Grep to discover, Serena symbol tools to read code.\n"
+    "DO NOT dispatch agents. Explore directly: Glob/Grep to discover, Serena symbol reads (serena_repl) for code.\n"
     "\n"
     "IDENTIFY areas needing deep understanding:\n"
     "\n"

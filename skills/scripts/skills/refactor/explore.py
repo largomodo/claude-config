@@ -10,10 +10,10 @@ Five-step workflow per category:
   5. Synthesis         - Format findings with severity assessment
 
 Step 1 prepends the Serena read preamble: this script runs as a
-general-purpose sub-agent with no tools: allowlist, so every Serena tool
-sits deferred behind ToolSearch until the preamble's load hint triggers
-it. Step 4 counts occurrences via Grep; Serena is used only for symbol
-reads and edits.
+general-purpose sub-agent with no tools: allowlist and no Serena manual of
+its own, so the preamble supplies the session bootstrap (initial_instructions),
+the REPL policy, the ToolSearch hint and the fallback. Step 4 counts occurrences via Grep; Serena
+is used only for symbol reads.
 """
 
 import argparse
@@ -134,6 +134,7 @@ def format_step_1(category_ref: str, mode: str = "code", scope: str | None = Non
     ]
 
     parts = [
+        # Leads the step-1 prompt so the session-id instruction precedes any exploration.
         SERENA_READ_PREAMBLE,
         "",
         render_step_header(StepHeaderNode(title="Domain Context", script="explore", step=1, category=category_ref, mode=mode)),
@@ -293,7 +294,7 @@ def format_step_4(category_ref: str, mode: str = "code", scope: str | None = Non
         "",
         "  1. Use Glob to find relevant files in scope",
         "  2. Use Grep with each pattern from <search_patterns>",
-        "  3. Examine matches with find_symbol (include_body) or get_symbols_overview; Read only for non-code files",
+        "  3. Examine matches via serena_repl with s.lsp.find_symbol (include_body=True) or s.lsp.get_symbols_overview; Read only for non-code files",
         "  4. Apply the detection question from Step 2 to each match",
         "",
         "CROSS-FILE ANALYSIS:",

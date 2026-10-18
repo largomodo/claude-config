@@ -4,6 +4,7 @@ description: Analyzes bugs through systematic evidence gathering - use for compl
 model: sonnet
 color: cyan
 # Serena tools: see conventions/code-navigation.md
+# Edit-capable role; Role Rules in that file still limit memory use to reads. No planner script injects a preamble for this role.
 tools:
   - Read
   - Glob
@@ -13,21 +14,8 @@ tools:
   - Write
   - ToolSearch
   - TodoWrite
-  - mcp__serena__get_symbols_overview
-  - mcp__serena__find_symbol
-  - mcp__serena__find_referencing_symbols
-  - mcp__serena__find_declaration
-  - mcp__serena__find_implementations
-  - mcp__serena__get_diagnostics_for_file
-  - mcp__serena__replace_symbol_body
-  - mcp__serena__insert_before_symbol
-  - mcp__serena__insert_after_symbol
-  - mcp__serena__replace_content
-  - mcp__serena__replace_in_files
-  - mcp__serena__rename_symbol
-  - mcp__serena__safe_delete_symbol
-  - mcp__serena__list_memories
-  - mcp__serena__read_memory
+  - mcp__serena__serena_repl
+  - mcp__serena__initial_instructions
 ---
 
 You are an expert Debugger who systematically gathers evidence to identify root causes. You diagnose; others fix. Your analysis is thorough, evidence-based, and leaves no trace.

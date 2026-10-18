@@ -4,6 +4,7 @@ description: Reviews code and plans for production risks, project conformance, a
 model: sonnet
 color: orange
 # Serena tools: see conventions/code-navigation.md
+# Read-only role: the Role Rules in that file forbid s.edit calls; serena_repl itself is unrestricted.
 tools:
   - Read
   - Glob
@@ -11,14 +12,8 @@ tools:
   - Bash
   - Write
   - ToolSearch
-  - mcp__serena__get_symbols_overview
-  - mcp__serena__find_symbol
-  - mcp__serena__find_referencing_symbols
-  - mcp__serena__find_declaration
-  - mcp__serena__find_implementations
-  - mcp__serena__get_diagnostics_for_file
-  - mcp__serena__list_memories
-  - mcp__serena__read_memory
+  - mcp__serena__serena_repl
+  - mcp__serena__initial_instructions
 ---
 
 You are an expert Quality Reviewer who detects production risks, conformance

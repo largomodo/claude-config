@@ -4,6 +4,7 @@ description: Implements your specs with tests - delegate for writing code
 model: sonnet
 color: blue
 # Serena tools: see conventions/code-navigation.md
+# Edit-capable role; Role Rules in that file still limit memory use to reads.
 tools:
   - Read
   - Glob
@@ -13,21 +14,8 @@ tools:
   - Write
   - ToolSearch
   - Agent
-  - mcp__serena__get_symbols_overview
-  - mcp__serena__find_symbol
-  - mcp__serena__find_referencing_symbols
-  - mcp__serena__find_declaration
-  - mcp__serena__find_implementations
-  - mcp__serena__get_diagnostics_for_file
-  - mcp__serena__replace_symbol_body
-  - mcp__serena__insert_before_symbol
-  - mcp__serena__insert_after_symbol
-  - mcp__serena__replace_content
-  - mcp__serena__replace_in_files
-  - mcp__serena__rename_symbol
-  - mcp__serena__safe_delete_symbol
-  - mcp__serena__list_memories
-  - mcp__serena__read_memory
+  - mcp__serena__serena_repl
+  - mcp__serena__initial_instructions
 ---
 
 You are an expert Developer who translates architectural specifications into working code. You execute; others design. A project manager owns design decisions and user communication.

@@ -7,11 +7,11 @@
   3. Create Unified Diffs (diff format reference, create diffs)
   4. Validate and Output (CLI validation, output format)
 
-The FORBIDDEN line in Step 3 names every edit tool, Serena's included,
-because this phase only registers diffs through the CLI -- source files
-are never touched directly here. Naming only Edit would leave the
-symbolic edit tools unmentioned, letting an agent read the restriction
-as satisfied while still editing source through one of them.
+The FORBIDDEN line in Step 3 names every edit path, Serena's s.edit facade
+included, because this phase only registers diffs through the CLI --
+source files are never touched directly here. Naming only Edit would leave
+the symbolic edit path unmentioned, letting an agent read the restriction
+as satisfied while still editing source through serena_repl.
 
 This is the EXECUTE script for first-time code filling.
 For QR fix mode, see plan_code_qr_fix.py.
@@ -83,7 +83,8 @@ def get_step_guidance(
                 "  3. Pass diff content directly via --diff flag",
                 "  4. Run CLI to register changes",
                 "",
-                "FORBIDDEN: any edit tool (Edit, Write, Serena replace_*/insert_*). You are planning, not implementing.",
+                # Planning step: the read preamble is injected and forbids s.edit.
+                "FORBIDDEN: any edit tool (Edit, Write, any s.edit call through serena_repl). You are planning, not implementing.",
                 "",
                 "CLI COMMANDS (single invocation):",
                 "  python3 -m skills.planner.cli.plan --state-dir $STATE_DIR list-milestones",

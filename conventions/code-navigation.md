@@ -1,6 +1,6 @@
 # Code Navigation
 
-Serena tool policy for reading and editing source files. Applies to the five
+Serena REPL policy for reading and editing source files. Applies to the five
 sub-agents (architect, developer, debugger, quality-reviewer, technical-writer)
 and to general-purpose agents spawned by skills.
 
@@ -9,9 +9,9 @@ and to general-purpose agents spawned by skills.
 Serena provides symbolic (LSP-backed) navigation and editing: it finds
 definitions, callers, and implementations by name rather than by text match,
 and edits a function or class as a unit rather than as raw lines. Grep/Read/
-Edit are text tools with no notion of a symbol; Serena's tools are code-aware.
-This document is the canonical policy; `prompts/serena.py` mirrors it as
-Python constants for sub-agent Task instructions, and
+Edit are text tools with no notion of a symbol; Serena's operations are
+code-aware. This document is the canonical policy; `prompts/serena.py`
+mirrors it as Python constants for sub-agent Task instructions, and
 `tests/test_serena_policy.py` keeps the two in sync.
 
 This policy lives here rather than in `agents/README.md` because agents
@@ -22,155 +22,192 @@ with no new path to teach -- and because the knowledge it documents spans
 cross-cutting scope `conventions/` exists for rather than any one
 directory's README.
 
-## Tool Map
+## Interface
 
-Every tool name below carries its full `mcp__serena__` prefix so the sync
-test can extract names with one regex.
+Serena exposes exactly two MCP tools: `mcp__serena__initial_instructions`
+(returns Serena's manual, the active-project info and a session id) and
+`mcp__serena__serena_repl(session_id, code)`. The code runs like a notebook
+cell against the entrypoint `s`, whose facades are `s.lsp`, `s.edit`,
+`s.mem`, `s.fs`, `s.shell` and `s.cfg`.
+
+- The trailing expression is the result; `print` returns nothing.
+- Top-level variables persist per session id. Every sub-agent run calls
+  `initial_instructions` once and uses its own id: a shared id lets parallel
+  agents overwrite each other's variables.
+- `s.info("lsp")` and `s.info("edit.replace_content")` document signatures
+  on demand.
+- One `serena_repl` call per logical step: map a file, read the symbol and
+  filter the result in one cell rather than one call per operation.
+- Methods with `max_answer_chars` cap their output; narrow the query rather
+  than raise the cap.
+
+## Operation Map
+
+Every operation is named in full, `s.<facade>.<method>`, so the sync test
+can extract names with one regex.
 
 ### Navigate
 
-| Tool                                    | Use when                                                     |
-| --------------------------------------- | ------------------------------------------------------------ |
-| `mcp__serena__get_symbols_overview`     | Map a file's structure before reading it                     |
-| `mcp__serena__find_symbol`              | Read a class/method by name path (`include_body=true`)       |
-| `mcp__serena__find_referencing_symbols` | Find callers and impact radius                               |
-| `mcp__serena__find_declaration`         | Jump to a definition from a usage site                       |
-| `mcp__serena__find_implementations`     | List concrete implementations of an interface/abstract class |
-| `mcp__serena__get_diagnostics_for_file` | Read compiler/LSP errors after an edit                       |
+| Operation                           | Use when                                                     |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `s.lsp.get_symbols_overview`        | Map a file's structure before reading it                     |
+| `s.lsp.find_symbol`                 | Read a class/method by name path (`include_body=True`)       |
+| `s.lsp.find_referencing_symbols`    | Find callers and impact radius                               |
+| `s.lsp.find_declaration`            | Jump to a definition from a usage site                       |
+| `s.lsp.find_implementations`        | List concrete implementations of an interface/abstract class |
+| `s.lsp.get_diagnostics_for_file`    | Read compiler/LSP errors after an edit                       |
 
 ### Edit
 
-| Tool                                | Use when                                          |
-| ----------------------------------- | ------------------------------------------------- |
-| `mcp__serena__replace_symbol_body`  | Rewrite a whole function or class                 |
-| `mcp__serena__insert_before_symbol` | Add an import or a new sibling before a symbol    |
-| `mcp__serena__insert_after_symbol`  | Add a new member or sibling after a symbol        |
-| `mcp__serena__replace_content`      | Make a targeted change inside a symbol            |
-| `mcp__serena__replace_in_files`     | Replace the same literal across files             |
-| `mcp__serena__rename_symbol`        | Rename with every reference updated               |
-| `mcp__serena__safe_delete_symbol`   | Delete after checking nothing still references it |
+| Operation                       | Use when                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| `s.edit.replace_symbol_body`    | Rewrite a whole function or class                                         |
+| `s.edit.insert_before_symbol`   | Add an import or a new sibling before a symbol                            |
+| `s.edit.insert_after_symbol`    | Add a new member or sibling after a symbol                                |
+| `s.edit.replace_content`        | Make a targeted change inside a symbol; a regex needle with wildcards keeps small edits short |
+| `s.edit.replace_in_files`       | Replace the same text across files; run with `dry_run=True` first         |
+| `s.lsp.rename_symbol`           | Rename with every reference updated                                       |
+| `s.lsp.safe_delete_symbol`      | Delete after checking nothing still references it                         |
 
 ### Memory
 
-| Tool                            | Use when                                          |
-| -------------------------------- | -------------------------------------------------- |
-| `mcp__serena__list_memories`     | See what project knowledge the main session saved  |
-| `mcp__serena__read_memory`       | Read one memory                                    |
+| Operation                | Use when                                          |
+| ------------------------ | ------------------------------------------------- |
+| `s.mem.list_memories`    | See what project knowledge the main session saved |
+| `s.mem.read_memory`      | Read one memory                                   |
 
 Memories (`.serena/memories/`) are project knowledge written by the main
 session. Sub-agents read them but never write them: parallel sub-agents
-writing the same memory would race and overwrite each other's notes. Memories
-rank Tier 3 in the convention hierarchy, below CLAUDE.md and README.md.
+writing the same memory would race. Memories are Tier 3 knowledge, below
+CLAUDE.md and README.md.
 
 ## Rules
 
 - **Read is forbidden for discovery on code files.** Map the file with
-  `get_symbols_overview`, then read the specific symbol with `find_symbol`
-  (`include_body=true`). Read is for non-code files, and for a few lines of
-  context immediately after an overview.
+  `s.lsp.get_symbols_overview`, then read the specific symbol with
+  `s.lsp.find_symbol` (`include_body=True`). Read is for non-code files, and
+  for a few lines of context immediately after an overview.
 - **Glob/Grep are allowed for discovery**, including occurrence counting.
   Once a candidate file or symbol name is known, the follow-up read is
   Serena's job, not Grep's.
-- **Reference searches go through `find_referencing_symbols`**, never Grep --
-  a text match on a name misses renamed imports, shadowing, and
-  string-only references gets false positives Serena already resolves away.
-- **Edit is forbidden on code files.** Use the Serena edit tools above; Edit
+- **Reference searches go through `s.lsp.find_referencing_symbols`**, never
+  Grep -- a text match on a name misses renamed imports, shadowing, and
+  string-only references and gets false positives Serena already resolves
+  away.
+- **Edit is forbidden on code files.** Use the `s.edit` methods above; Edit
   and Write are for non-code files (docs, config, data).
 - **Serena line numbers are 0-based.**
-- **Batch independent Serena calls in one message** rather than issuing them
-  one at a time.
+- **Compose independent operations in one `serena_repl` call** instead of
+  issuing one call per operation.
 - Do not reason about a symbol from its name alone when its body is one
-  `find_symbol` call away.
+  `s.lsp.find_symbol` call away.
+
+## Role Rules
+
+| Role              | Serena use                                              |
+| ----------------- | ------------------------------------------------------- |
+| architect         | Read-only: no `s.edit` call, no `s.fs.create_text_file`, no `s.shell`; Write only for plan state and reports |
+| quality-reviewer  | Read-only: same restrictions as architect               |
+| developer         | Edit-capable                                            |
+| debugger          | Edit-capable                                            |
+| technical-writer  | Edit-capable                                            |
+
+Every role reads memories only. Sub-agents never call `s.mem.write_memory`,
+`s.mem.edit_memory`, `s.mem.rename_memory`, `s.mem.delete_memory` or
+`s.mem.onboarding`; parallel sub-agents writing shared project memory would
+race and corrupt it.
+
+`serena_repl` is one fully privileged tool, so an allowlist cannot withhold
+editing or memory writes from a role. These rules are instruction, not
+enforcement. The step-1 preamble (`SERENA_READ_ROLE_RULE` /
+`SERENA_EDIT_ROLE_RULE`) carries them into every scripted run; debugger has
+no planner package and relies on this document.
+
+The read-only clause is written out as an explicit prohibition for the same
+reason: an agent follows a stated rule, not the absence of one, and the
+allowlist cannot supply the missing restriction.
 
 ## Fallback
 
-If no `mcp__serena__` tool exists in the project (Serena is not configured
-there), use Read/Grep/Edit and state the fallback once. Do not call
-ToolSearch repeatedly hoping a Serena tool appears -- most projects on this
-host never configure Serena, and an unconditional Serena-first rule would
-otherwise leave those sessions stalled or hallucinating tool calls.
+If `mcp__serena__serena_repl` is unavailable after one ToolSearch (Serena is
+not configured for the project), use Read/Grep/Edit and state the fallback
+once. Do not call ToolSearch repeatedly hoping the tool appears -- most
+projects on this host never configure Serena, and an unconditional
+Serena-first rule would otherwise leave those sessions stalled or
+hallucinating tool calls.
 
-## Sub-Agent Allowlists
+The fallback keys on `mcp__serena__serena_repl` alone: it is the one tool
+that carries every operation, so its absence means no Serena operation is
+reachable.
 
-Each of the five agents enumerates its tools explicitly rather than granting
-`mcp__serena__*` as a wildcard: an allowlisted MCP tool arrives pre-loaded and
-callable from the agent's first turn, while an unlisted one sits deferred
-behind ToolSearch with no manual delivered until something loads it -- next
-to Read from turn one is the strongest nudge available. A wildcard would also
-hand every sub-agent `write_memory`/`delete_memory`/`onboarding`, which
-parallel quality-reviewer agents would then race on.
+## Sub-Agent Grants
 
-| Role              | Serena tools granted                          | Rationale |
-| ----------------- | ---------------------------------------------- | --------- |
-| architect          | Navigate + memory-read (8)                     | Designs, does not touch source files; also gets `WebSearch` for external research during design |
-| quality-reviewer   | Navigate + memory-read (8)                     | Reviews, does not touch source files |
-| developer          | Navigate + Edit + memory-read (15)             | Implements; also gets `Agent` (not the legacy `Task` alias -- DL-014) for wave-parallel sub-agent dispatch |
-| debugger           | Navigate + Edit + memory-read (15)             | Fixes bugs in place; also gets `TodoWrite` because its steps require every modification logged before it is made and verified against that log at cleanup |
-| technical-writer   | Navigate + Edit + memory-read (15)             | Fixes source comments during documentation passes |
+Each of the five agents lists `mcp__serena__serena_repl` and
+`mcp__serena__initial_instructions` in its tools, and nothing else from
+Serena. `initial_instructions` is granted because it is the only source of a
+session id and of Serena's manual, and it writes nothing. The two names are
+listed explicitly rather than as a wildcard; a wildcard adds nothing when
+only two tools exist.
 
-Every role also keeps `Read`, `Glob`, `Grep`, `Bash`, `Write` and
-`ToolSearch`; architect additionally keeps `WebSearch` for research the
-other four roles have no need for. Glob and Grep are the discovery tools,
-but some permission modes expose no Glob or Grep at all -- an unavailable
-tool name is simply dropped rather than causing an error -- so Bash covers
-ad hoc discovery when that happens. Write lets architect and
-quality-reviewer create files even though neither role edits source:
-quality-reviewer's `exec_reconcile.py` writes `{tmpdir}/qr.md` and both
-roles' scripts save relay state before yielding a question. Edit is
-withheld from architect and quality-reviewer entirely, not merely narrowed
-to non-code files: their scripts write `plan.json` through the CLI and
-reports through Write, and never modify an existing file, so Edit is
-granted whole to developer, debugger and technical-writer instead of
-split by file type across every role. ToolSearch is assumed to load a
-Serena tool that arrives deferred (unverified: allowlisted MCP tools have
-only been observed pre-loaded, never deferred, so this path is untested).
+`ToolSearch` stays in every list. ToolSearch is assumed to load a Serena tool that arrives deferred
+(unverified: allowlisted MCP tools have only been observed pre-loaded,
+never deferred, so this path is untested). The load hint
+(`ToolSearch select:` both names) cannot run without it. The Fallback
+stops the agent after that single call, so the hint cannot become a loop.
 
-technical-writer receives the identical seven-tool edit set as developer and
-debugger, not a narrower one limited to the edit tools it uses most: the
-edit-capable preamble's ToolSearch load hint lists one fixed set of Serena
-edit tools, so every role it applies to must actually hold every tool named
-in it.
+| Role              | Host tools beyond the common set | Rationale |
+| ----------------- | -------------------------------- | --------- |
+| architect         | `WebSearch`                      | External research during design |
+| quality-reviewer  | none                             | Reviews, does not touch source files |
+| developer         | `Edit`, `Agent`                  | Implements; `Agent` (not the legacy `Task` alias -- DL-014) for wave-parallel sub-agent dispatch |
+| debugger          | `Edit`, `TodoWrite`              | Fixes bugs in place; `TodoWrite` because its steps require every modification logged before it is made and verified against that log at cleanup |
+| technical-writer  | `Edit`                           | Fixes source comments during documentation passes |
 
-Memory access is `mcp__serena__list_memories` and `mcp__serena__read_memory`
-only, for every role. The remaining six Serena tools --
-`mcp__serena__write_memory`, `mcp__serena__edit_memory`,
-`mcp__serena__rename_memory`, `mcp__serena__delete_memory`,
-`mcp__serena__onboarding`, and `mcp__serena__initial_instructions` -- are
-never granted to a sub-agent; they drive the main session's own Serena setup
-and would let parallel sub-agents corrupt shared project memory.
+Every role keeps `Read`, `Glob`, `Grep`, `Bash`, `Write` and `ToolSearch`.
+Glob and Grep are the discovery tools, but some permission modes expose no
+Glob or Grep at all -- an unavailable tool name is simply dropped rather
+than causing an error -- so Bash covers ad hoc discovery when that happens.
+Write lets architect and quality-reviewer create files even though neither
+role edits source: quality-reviewer's `exec_reconcile.py` writes
+`{tmpdir}/qr.md` and both roles' scripts save relay state before yielding a
+question. Edit is withheld from architect and quality-reviewer entirely,
+not merely narrowed to non-code files: their scripts write `plan.json`
+through the CLI and reports through Write, and never modify an existing
+file, so Edit is granted whole to developer, debugger and technical-writer
+instead of split by file type across every role.
 
-`get_current_config` and `activate_project` are
-disabled by Serena's single-project mode and are not part of any allowlist or
-of the 21-tool deployed set below.
+## Host-Covered Operations
 
-## Excluded tools
+The REPL can call these, but sub-agents use the host tool instead:
 
-Serena's claude-code context removes six tools because Claude Code's own
-built-ins already cover the same need; naming any of them in an allowlist is
-a silent no-op, not an error:
+| Operation                      | Host tool                                                    |
+| ------------------------------ | ------------------------------------------------------------ |
+| `s.fs.search_for_pattern`      | Grep                                                         |
+| `s.fs.list_dir`                | Glob or Bash `ls`                                            |
+| `s.fs.find_file`               | Glob                                                         |
+| `s.fs.read_file`               | Read, for non-code files only (code is read through `s.lsp` as the Rules require) |
+| `s.fs.create_text_file`        | Write                                                        |
+| `s.shell.execute_shell_command` | Bash                                                        |
 
-- `mcp__serena__search_for_pattern` -- use Grep
-- `mcp__serena__list_dir` -- use Glob or Bash `ls`
-- `mcp__serena__find_file` -- use Glob
-- `mcp__serena__read_file` -- use Read
-- `mcp__serena__create_text_file` -- use Write
-- `mcp__serena__execute_shell_command` -- use Bash
-
-Together with the 6 navigate + 7 edit + 2 memory-read tools in Tool Map
-above and the 6 tools denied to sub-agents in Sub-Agent Allowlists above
-(`write_memory`, `edit_memory`, `rename_memory`, `delete_memory`,
-`onboarding`, `initial_instructions` -- not the 6 excluded tools just
-listed), this accounts for the full 21-tool set Serena's claude-code
-context deploys.
+Host tools are permission-gated and each call is visible by name in the
+transcript, while a `serena_repl` call shows only its code.
 
 ## Sync
 
 `skills/lib/workflow/prompts/serena.py` mirrors this document as Python
-constants (`SERENA_READ_TOOLS`, `SERENA_EDIT_TOOLS`,
-`SERENA_MEMORY_READ_TOOLS`, `SERENA_SUBAGENT_DENIED_TOOLS`,
-`SERENA_EXCLUDED_TOOLS`) because sub-agents driven by planner scripts obey
-the script's stdout during a run, not this file's prose.
-`skills/scripts/tests/test_serena_policy.py` enforces the sync in both
-directions: every tool name in those constants appears here, prefixed, and
-every `mcp__serena__`-prefixed name that appears here is one of those
-constants' real tool names.
+constants (`SERENA_MCP_TOOLS`, `SERENA_READ_METHODS`, `SERENA_EDIT_METHODS`,
+`SERENA_MEMORY_READ_METHODS`, `SERENA_SUBAGENT_DENIED_METHODS`,
+`SERENA_HOST_COVERED_METHODS`) because sub-agents driven by planner scripts
+obey the script's stdout during a run, not this file's prose.
+Sections map one-to-one onto the constants: Sub-Agent Grants onto
+`SERENA_MCP_TOOLS`, Operation Map and Host-Covered Operations onto the
+method tuples, Role Rules onto the role clauses. The sync test and a human
+reader therefore see the same structure.
+Operations are named `s.<facade>.<method>` because that is how Serena's
+own manual names them, and one regex over that form needs no YAML parser
+and no Serena import, neither of which CI provides.
+`skills/scripts/tests/test_serena_policy.py` extracts every
+`s.<facade>.<method>` name here and checks it against those tuples in both
+directions, and checks that the only `mcp__serena__` names in any `.md`,
+`.py`, `.yml`, `.yaml` or `.json` file under the repo root are the two in
+`SERENA_MCP_TOOLS`.

@@ -13,9 +13,9 @@ in the subagent's launching prompt. This script emits guidance that refers
 to "the focus area" -- the agent knows what it is from its prompt context.
 
 Step 1 prepends the Serena read preamble: this script runs as a
-general-purpose sub-agent with no tools: allowlist, so every Serena tool
-sits deferred behind ToolSearch and Serena's own manual never reaches it
-otherwise -- the preamble's load hint is the only trigger it gets.
+general-purpose sub-agent with no tools: allowlist and no Serena manual of
+its own, so the preamble supplies the session bootstrap (initial_instructions),
+the REPL policy, the ToolSearch hint and the fallback.
 """
 
 import argparse
@@ -69,7 +69,7 @@ MAP_INSTRUCTIONS = (
     "INPUT: Use entry points from Step 1.\n"
     "\n"
     "ACTIONS:\n"
-    "  1. Map entry points: get_symbols_overview then find_symbol for key symbols (Read for non-code files)\n"
+    "  1. Map entry points: via serena_repl, s.lsp.get_symbols_overview then s.lsp.find_symbol for key symbols (Read for non-code files)\n"
     "  2. Trace imports, calls, data flow\n"
     "  3. Build component inventory\n"
     "  4. Identify relationships between components\n"
@@ -183,6 +183,7 @@ def format_output(step: int) -> str:
 
     title, instructions = STATIC_STEPS[step]
     if step == 1:
+        # Steps 2+ run in the same sub-agent context, which already holds the preamble.
         instructions = SERENA_READ_PREAMBLE + "\n\n" + instructions
 
     next_cmd = build_next_command(step)

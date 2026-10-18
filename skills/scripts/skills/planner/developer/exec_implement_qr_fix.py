@@ -11,8 +11,8 @@ For first-time implementation, see exec_implement_execute.py.
 Router (exec_implement.py) dispatches to appropriate script.
 
 Temporal-contamination and structural fixes edit the source file directly
-through Serena's edit tools for code, Edit for non-code files -- never the
-plan file.
+through serena_repl (s.edit.replace_symbol_body, s.edit.replace_content) for code, Edit for non-code
+files -- never the plan file.
 
 Tool-neutral phrasing avoids naming Edit outright: an instruction that
 names Edit for a code file contradicts the preamble's rule against
@@ -108,7 +108,8 @@ def get_step_guidance(
                 "",
                 "Temporal contamination:",
                 "  - Rewrite comments to remove change-relative language",
-                "  - Edit the source file directly (Serena edit tools for code; Edit for non-code files)",
+                # The edit preamble is injected for this script, so s.edit is permitted; planning scripts get the read preamble that forbids it.
+                "  - Edit the source file directly (s.edit.replace_symbol_body / s.edit.replace_content via serena_repl for code; Edit for non-code files)",
                 "",
                 "Structural issues:",
                 "  - Extract functions if >50 lines",

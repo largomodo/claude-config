@@ -13,7 +13,7 @@ Universal conventions for agents and skills.
 | `temporal.md`        | Timeless present rule for comments                 | TW/QR temporal contamination checks, writing comments  |
 | `diff-format.md`     | Unified diff spec for code changes                 | Writing code diffs, Developer/QR diff validation       |
 | `REGISTRY.yaml`      | Convention registry for get_convention()           | Adding conventions, debugging validate_conventions CI  |
-| `code-navigation.md` | Serena tool policy, sub-agent allowlists, fallback | Reading or editing source files, modifying agent tools |
+| `code-navigation.md` | Serena REPL policy, role rules, sub-agent grants, fallback | Reading or editing source files, modifying agent tools or Serena preambles |
 
 ## Subdirectories
 

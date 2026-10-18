@@ -9,8 +9,9 @@ Sub-agents invoke this script immediately upon receiving their prompt.
 The script provides step-by-step guidance; the agent follows exactly.
 
 Step 2's search wording follows the Serena-first navigation policy: Grep
-locates candidate code, then get_symbols_overview/find_symbol examine it;
-Read stays reserved for non-code files.
+locates candidate code (it returns file paths cheaply), then
+s.lsp.get_symbols_overview / s.lsp.find_symbol through serena_repl examine
+it; Read stays reserved for non-code files.
 """
 
 STEPS = {
@@ -113,7 +114,7 @@ GOOD (neutral): "What synchronization primitive is used?" -> discovers reality
             "",
             "  2. SEARCH the codebase:",
             "     - Grep to locate candidate code",
-            "     - get_symbols_overview / find_symbol to examine candidates (Read for non-code files)",
+            "     - s.lsp.get_symbols_overview / s.lsp.find_symbol via serena_repl to examine candidates (Read for non-code files)",
             "     - Check if behavior matches criterion",
             "",
             "  3. RECORD finding:",

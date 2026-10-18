@@ -1,14 +1,14 @@
 """CLI utilities for workflow scripts.
 
 Handles argument parsing and mode script entry points. mode_main() also
-injects the Serena tool-navigation preamble on step 1, choosing between a
-read-only and an edit-capable variant based on the calling script's module
-path; router scripts that hand off to another script's step 1 are skipped
+injects the Serena REPL policy preamble on step 1, choosing between a
+read-only and an edit-capable role clause based on the calling script's
+module path; router scripts that hand off to another script's step 1 are skipped
 so the preamble is not printed twice in the same sub-agent turn.
 
 Orchestrator scripts (planner.py, executor.py) never call mode_main() and
 never receive this preamble; they carry ORCHESTRATOR_CONSTRAINT
-(skills.planner.shared.constraints) instead, unchanged by this policy.
+(skills.planner.shared.constraints) instead.
 """
 
 import argparse
@@ -54,15 +54,17 @@ def _compute_module_path(script_file: str) -> str:
 def _serena_preamble_for(module_path: str) -> str:
     """Select the Serena preamble variant for a mode script's module path.
 
-    The edit variant applies only when the module is an exec_* script of
-    the developer or technical_writer role package -- those are the only
-    scripts that modify source files. Every other script, including the
-    planning-only plan_code_* and plan_docs_* scripts of the same two
-    roles, gets the read variant.
+    The edit variant (SERENA_EDIT_ROLE_RULE) applies only when the module is
+    an exec_* script of the developer or technical_writer role package --
+    those are the only scripts that modify source files. Every other
+    script, including the planning-only plan_code_* and plan_docs_* scripts
+    of the same two roles, gets the read variant, whose clause forbids
+    s.edit, s.fs.create_text_file and s.shell.
     """
     parts = module_path.split(".")
     role = parts[-2] if len(parts) >= 2 else ""
     leaf = parts[-1] if parts else ""
+    # debugger has no planner package, so it never reaches this selection.
     if role in ("developer", "technical_writer") and leaf.startswith("exec_"):
         return SERENA_EDIT_PREAMBLE
     return SERENA_READ_PREAMBLE

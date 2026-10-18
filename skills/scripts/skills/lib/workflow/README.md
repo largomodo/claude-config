@@ -108,25 +108,32 @@ plus QR args, calls the script's `get_step_guidance()`, and prints via
 step 1 only -- once per workflow is enough; repeating it every step wastes
 tokens.
 
-`mode_main()` also injects the Serena tool-navigation preamble on step 1,
+`mode_main()` also injects the Serena REPL policy preamble on step 1,
 skipping router hand-offs (guidance carrying `dispatch_to`) because the
-execute script's own step 1 injects in the same sub-agent turn. The edit
-variant goes only to `exec_*` scripts of the `developer` and
-`technical_writer` packages, because the `plan_*` scripts of those same
-roles are planning-only and forbid edit tools; every other script gets the
-read variant. Orchestrator scripts (`planner.py`, `executor.py`) never call
-`mode_main()` and never inject a preamble; they carry
-`ORCHESTRATOR_CONSTRAINT` (`skills.planner.shared.constraints`) instead,
-unchanged by this policy. Both preamble variants end with `SERENA_FALLBACK`
-so a sub-agent in a project where Serena is not configured drops to
-Read/Grep/Edit and says so once, rather than stalling or hallucinating
-`mcp__serena__` tool calls.
+execute script's own step 1 injects in the same sub-agent turn. Both
+variants share `SERENA_POLICY` and differ only in the role clause:
+`SERENA_EDIT_ROLE_RULE` goes to `exec_*` scripts of the `developer` and
+`technical_writer` packages (the `plan_*` scripts of those same roles are
+planning-only), `SERENA_READ_ROLE_RULE` to every other script. The clause
+exists because `serena_repl` is one tool for every operation, so only prose
+can keep a read-only role from editing. Orchestrator scripts (`planner.py`,
+`executor.py`) never call `mode_main()` and never inject a preamble; they
+carry `ORCHESTRATOR_CONSTRAINT` (`skills.planner.shared.constraints`)
+instead. Both variants end with `SERENA_LOAD_HINT`
+and `SERENA_FALLBACK`; the fallback fires when `mcp__serena__serena_repl` is
+unavailable, so a sub-agent in a project where Serena is not configured
+drops to Read/Grep/Edit and says so once.
+
+Each sub-agent obtains its own session id from `initial_instructions`: the
+REPL namespace persists per id, so a shared id would let parallel sub-agents
+overwrite each other's variables.
 
 `prompts/serena.py` mirrors `conventions/code-navigation.md` as constants for
 the same reason: sub-agents driven by planner scripts obey the script's
 stdout during a run, not agent prose, and loading the convention through
 `get_convention()` would need a registry entry per role. A test keeps the
-convention and the constants in sync in both directions.
+`s.<facade>.<method>` vocabulary and the two MCP tool names in sync between
+the convention and the constants in both directions.
 
 **Separate CLI entry points per script**: running modules as `__main__`
 causes module identity issues (imported by `__init__.py` vs executed as

@@ -10,4 +10,4 @@ Plain-text prompt building blocks for workflows (f-string composition; no XML, n
 | `subagent.py` | Dispatch prompt building blocks (3 dispatch patterns) | Modifying sub-agent dispatch prompts                |
 | `file.py`     | File content embedding (4-backtick fences)            | Embedding file content in prompts                   |
 | `__init__.py` | Package exports                                       | Importing prompt helpers                            |
-| `serena.py`   | Serena tool policy constants and preambles            | Changing sub-agent tool policy, adding Serena tools |
+| `serena.py`   | Serena REPL policy constants, role clauses and preambles | Changing sub-agent Serena policy, facade-method vocabulary, role clauses |

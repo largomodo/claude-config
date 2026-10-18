@@ -15,7 +15,7 @@ Test suite for skills workflow framework.
 | `test_domain_types.py`       | Unit tests for BoundedInt, ChoiceSet, Constant       | Testing domain type behavior                                       |
 | `test_generation.py`         | Schema extraction and input generation for tests     | Modifying test case generation                                     |
 | `test_ast.py`                | Property-based AST node and renderer tests           | Testing AST construction and rendering                             |
-| `test_serena_policy.py`      | Serena tool-name, allowlist and preamble guards      | Changing agents tools lists, code-navigation convention, serena.py |
+| `test_serena_policy.py`      | Serena MCP tool-name, facade-method sync, repo-wide hallucination scan, agent grant and preamble guards | Changing agents tools lists, code-navigation convention, serena.py |
 | `test_qr_cli.py`             | Verdict transition matrix, iteration stamping and backfill | Changing update-item rules, increment_qr_iteration |
 | `test_plan_scope.py`         | Plan file scope union, porcelain parsing, delta classification | Changing fix-mode scope guidance or plan_scope.py |
 | `test_plan_handoff.py`       | Provenance header round-trip, executor state resolution, DELIVER block | Changing plan.md provenance or executor --plan-file |

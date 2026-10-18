@@ -1,12 +1,24 @@
-"""Tests guarding the Serena tool policy against drift.
+"""Tests guarding the Serena REPL policy against drift.
 
-Ties together three surfaces that must stay in sync: the deployed Serena
-tool set (REAL_SERENA_TOOLS, hardcoded from claude-code.yml), the Python
-constants in skills.lib.workflow.prompts.serena, the tools: allowlists in
-agents/*.md, and the prose in conventions/code-navigation.md. Also guards
-that mode_main injects the right preamble variant at the right step, that
-orchestrator scripts never inject, and that pre-Serena tool phrasing does
-not reappear in skill scripts.
+Ties together four surfaces that must stay in sync: the two real MCP tool
+names and the facade methods Serena's REPL exposes (hardcoded here because
+CI has only pytest and hypothesis), the Python constants in
+skills.lib.workflow.prompts.serena, the tools: lists in agents/*.md, and the
+prose in conventions/code-navigation.md. Also guards that mode_main injects
+the right preamble variant at the right step, that orchestrator scripts
+never inject, that leaf scripts inject their own preamble, and that
+phrasing which routes code reads or edits around Serena is absent from
+skill scripts.
+
+The facade-method set is hardcoded from serena/repl/api/*_api.py,
+non-optional methods only: claude-env sets no included_apis, so the optional
+methods (delete_lines, replace_lines, insert_at_line,
+get_diagnostics_for_symbol, restart_language_server) are unavailable.
+Names in prose are extracted as s.<facade>.<method> because that is how
+Serena's manual names them and one regex needs no YAML parser or Serena
+import. The mcp__serena__ scan walks the whole repo root and skips only
+.git and __pycache__, so every output style and workflow under the root
+is scanned.
 
 Frontmatter parsing uses a hand-rolled scanner rather than a YAML parser
 because the suite runs with only pytest and hypothesis installed. The
@@ -16,9 +28,10 @@ path, step and guidance and needs no state-dir fixture. Leaf scripts carry
 no state requirement, so a subprocess call is cheap and exercises them the
 way they actually run. A forbidden-phrase scan catches wording that
 instructs an agent to read or search with Read, Glob or Grep directly
-instead of the Serena tools. (DL-011)
+instead of the Serena operations.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -29,50 +42,85 @@ import pytest
 from skills.lib.workflow.prompts.serena import (
     SERENA_TOOL_PREFIX,
     SERENA_POLICY,
-    SERENA_READ_TOOLS,
-    SERENA_EDIT_TOOLS,
-    SERENA_MEMORY_READ_TOOLS,
-    SERENA_SUBAGENT_DENIED_TOOLS,
-    SERENA_EXCLUDED_TOOLS,
+    SERENA_MCP_TOOLS,
+    SERENA_READ_METHODS,
+    SERENA_EDIT_METHODS,
+    SERENA_MEMORY_READ_METHODS,
+    SERENA_SUBAGENT_DENIED_METHODS,
+    SERENA_HOST_COVERED_METHODS,
+    SERENA_READ_ROLE_RULE,
+    SERENA_EDIT_ROLE_RULE,
+    SERENA_LOAD_HINT,
+    SERENA_FALLBACK,
     SERENA_READ_PREAMBLE,
     SERENA_EDIT_PREAMBLE,
-    SERENA_FALLBACK,
 )
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-# Source: serena/resources/config/contexts/claude-code.yml (excluded_tools)
-# plus serena/agent.py SingleProjectExclusions, which removes
-# activate_project and get_current_config when single_project mode is set.
-# Those two names are deliberately absent below.
-REAL_SERENA_TOOLS = frozenset((
-    "get_symbols_overview",
-    "find_symbol",
-    "find_referencing_symbols",
-    "find_declaration",
-    "find_implementations",
-    "get_diagnostics_for_file",
-    "replace_symbol_body",
-    "insert_before_symbol",
-    "insert_after_symbol",
-    "replace_content",
-    "replace_in_files",
-    "rename_symbol",
-    "safe_delete_symbol",
-    "list_memories",
-    "read_memory",
-    "write_memory",
-    "edit_memory",
-    "rename_memory",
-    "delete_memory",
-    "onboarding",
+# Source: serena/tools/repl_tools.py. SerenaAgent with the claude-code
+# context in single-project REPL mode exposes exactly these two tools.
+REAL_SERENA_MCP_TOOLS = frozenset((
+    "serena_repl",
     "initial_instructions",
 ))
-assert len(REAL_SERENA_TOOLS) == 21
+
+# Source: serena/repl/api/{lsp,edit,mem,fs,shell,cfg}_api.py @facade_method
+# entries without optional=True. Hardcoded: re-check this set against those
+# files whenever claude-env bumps SERENA_VERSION, since a Serena upgrade can
+# add, rename or remove facade methods without any change in this repo.
+REAL_SERENA_FACADE_METHODS = frozenset((
+    "lsp.get_symbols_overview",
+    "lsp.find_symbol",
+    "lsp.find_referencing_symbols",
+    "lsp.find_implementations",
+    "lsp.find_declaration",
+    "lsp.get_diagnostics_for_file",
+    "lsp.rename_symbol",
+    "lsp.safe_delete_symbol",
+    "edit.replace_content",
+    "edit.replace_in_files",
+    "edit.replace_symbol_body",
+    "edit.insert_after_symbol",
+    "edit.insert_before_symbol",
+    "mem.list_memories",
+    "mem.read_memory",
+    "mem.write_memory",
+    "mem.edit_memory",
+    "mem.rename_memory",
+    "mem.delete_memory",
+    "mem.onboarding",
+    "fs.read_file",
+    "fs.create_text_file",
+    "fs.list_dir",
+    "fs.find_file",
+    "fs.search_for_pattern",
+    "shell.execute_shell_command",
+    "cfg.get_current_config",
+    "cfg.open_dashboard",
+))
+assert len(REAL_SERENA_FACADE_METHODS) == 28
+
+POLICY_METHODS = frozenset(
+    SERENA_READ_METHODS
+    + SERENA_EDIT_METHODS
+    + SERENA_MEMORY_READ_METHODS
+    + SERENA_SUBAGENT_DENIED_METHODS
+    + SERENA_HOST_COVERED_METHODS
+)
+
+# Serena's manual names operations s.<facade>.<method>; one regex over that
+# form keeps prose, preambles and this test in sync without a YAML parser or
+# a Serena import, which CI lacks. The alternation lists the six facades.
+FACADE_METHOD_PATTERN = re.compile(r"\bs\.(lsp|edit|mem|fs|shell|cfg)\.([a-z_]+)")
 
 SERENA_POLICY_FIRST_LINE = SERENA_POLICY.splitlines()[0]
 
+# Skill-script wording changes only where it names a per-operation mechanism
+# ("Serena symbol tools", bare operation names). Phrases that describe the
+# operation class without a mechanism ("Serena symbol reads") stay as written:
+# the preamble supplies the mechanism, and rewriting them adds no instruction.
 FORBIDDEN_PHRASES = (
     "Use Glob, Grep, Read tools directly",
     "Use Read/Glob/Grep",
@@ -82,9 +130,6 @@ FORBIDDEN_PHRASES = (
     "using Edit tool",
 )
 
-EXCLUDED_PATTERN = re.compile(
-    r"mcp__serena__(" + "|".join(SERENA_EXCLUDED_TOOLS) + r")\b"
-)
 SERENA_NAME_PATTERN = re.compile(r"mcp__serena__([a-z_]+)")
 
 EDIT_ROLES = {"developer", "debugger", "technical-writer"}
@@ -93,6 +138,11 @@ AGENTS_DIR = REPO_ROOT / "agents"
 CONVENTIONS_DIR = REPO_ROOT / "conventions"
 SKILLS_DIR = REPO_ROOT / "skills" / "scripts" / "skills"
 CONVENTION_FILE = CONVENTIONS_DIR / "code-navigation.md"
+
+SCAN_SUFFIXES = (".md", ".py", ".yml", ".yaml", ".json")
+# Only these two are pruned: skipping every dot-prefixed directory would
+# exclude .github/ from the scan.
+SCAN_PRUNED_DIRS = (".git", "__pycache__")
 
 
 def parse_agent_tools(path: Path) -> list[str]:
@@ -131,63 +181,62 @@ def _agent_files():
 
 
 # =============================================================================
-# Tool tuple partition
+# Tool and method partition
 # =============================================================================
 
 
-def test_tool_tuples_partition_real():
-    """The four non-excluded tuples partition REAL_SERENA_TOOLS."""
+def test_mcp_tools_match_real():
+    """SERENA_MCP_TOOLS is exactly the two tools the REPL interface exposes."""
+    assert set(SERENA_MCP_TOOLS) == REAL_SERENA_MCP_TOOLS
+
+
+def test_method_tuples_partition_real():
+    """The five method tuples are disjoint facade.method names; only cfg is unnamed."""
     groups = (
-        SERENA_READ_TOOLS,
-        SERENA_EDIT_TOOLS,
-        SERENA_MEMORY_READ_TOOLS,
-        SERENA_SUBAGENT_DENIED_TOOLS,
+        SERENA_READ_METHODS,
+        SERENA_EDIT_METHODS,
+        SERENA_MEMORY_READ_METHODS,
+        SERENA_SUBAGENT_DENIED_METHODS,
+        SERENA_HOST_COVERED_METHODS,
     )
     seen = set()
     for group in groups:
+        for entry in group:
+            assert re.match(r"^(lsp|edit|mem|fs|shell)\.[a-z_]+$", entry), entry
         overlap = seen & set(group)
-        assert not overlap, f"Duplicate tool names across tuples: {overlap}"
+        assert not overlap, f"Duplicate method names across tuples: {overlap}"
         seen |= set(group)
-    assert seen == REAL_SERENA_TOOLS
-    assert set(SERENA_EXCLUDED_TOOLS).isdisjoint(REAL_SERENA_TOOLS)
+    assert seen <= REAL_SERENA_FACADE_METHODS
+    assert REAL_SERENA_FACADE_METHODS - seen == {
+        "cfg.get_current_config",
+        "cfg.open_dashboard",
+    }
 
 
 # =============================================================================
-# Agent allowlists
+# Agent grants
 # =============================================================================
 
 
 @pytest.mark.parametrize("path", _agent_files(), ids=lambda p: p.stem)
-def test_agent_allowlists(path):
-    """Every agent's Serena names are grantable; no denied or excluded names."""
+def test_agent_grants(path):
+    """Every agent grants exactly the two Serena MCP tools and the host basics."""
     tools = parse_agent_tools(path)
     assert tools, f"{path.name} has no tools: list"
     for required in ("Read", "Glob", "Grep", "Bash", "Write", "ToolSearch"):
         assert required in tools, f"{path.name} missing {required}"
 
-    grantable = set(SERENA_READ_TOOLS) | set(SERENA_EDIT_TOOLS) | set(SERENA_MEMORY_READ_TOOLS)
-    for tool in tools:
-        if not tool.startswith(SERENA_TOOL_PREFIX):
-            continue
-        name = tool[len(SERENA_TOOL_PREFIX):]
-        assert name in grantable, f"{path.name} lists non-grantable Serena tool {tool}"
-        assert name not in SERENA_SUBAGENT_DENIED_TOOLS, f"{path.name} lists denied Serena tool {tool}"
-        assert name not in SERENA_EXCLUDED_TOOLS, f"{path.name} lists excluded Serena tool {tool}"
+    serena_tools = {t for t in tools if t.startswith(SERENA_TOOL_PREFIX)}
+    expected = {SERENA_TOOL_PREFIX + name for name in SERENA_MCP_TOOLS}
+    assert serena_tools == expected, f"{path.name}: Serena grants {serena_tools}"
 
 
 @pytest.mark.parametrize("path", _agent_files(), ids=lambda p: p.stem)
 def test_edit_capability(path):
-    """Edit and the Serena edit tools appear only for edit-capable roles."""
+    """Edit appears only for edit-capable roles."""
     tools = parse_agent_tools(path)
     is_edit_role = path.stem in EDIT_ROLES
-
     assert ("Edit" in tools) == is_edit_role, f"{path.name}: Edit presence mismatch"
-
-    for tool in SERENA_EDIT_TOOLS:
-        prefixed = SERENA_TOOL_PREFIX + tool
-        assert (prefixed in tools) == is_edit_role, (
-            f"{path.name}: {prefixed} presence mismatch"
-        )
 
 
 def test_developer_has_agent_tool():
@@ -207,66 +256,55 @@ def test_developer_has_agent_tool():
 # =============================================================================
 
 
-def test_convention_mentions_every_tool():
-    """Every real, denied and excluded tool name appears prefixed in the convention."""
+def test_convention_mentions_every_method():
+    """Every policy method appears as s.<facade>.<method> in the convention."""
     text = CONVENTION_FILE.read_text()
-    all_names = (
-        set(SERENA_READ_TOOLS)
-        | set(SERENA_EDIT_TOOLS)
-        | set(SERENA_MEMORY_READ_TOOLS)
-        | set(SERENA_SUBAGENT_DENIED_TOOLS)
-        | set(SERENA_EXCLUDED_TOOLS)
-    )
-    for name in all_names:
+    for entry in POLICY_METHODS:
+        assert "s." + entry in text, f"s.{entry} missing from {CONVENTION_FILE.name}"
+
+
+def test_convention_methods_are_known():
+    """Every s.<facade>.<method> name in the convention is a policy method."""
+    text = CONVENTION_FILE.read_text()
+    for match in FACADE_METHOD_PATTERN.finditer(text):
+        entry = f"{match.group(1)}.{match.group(2)}"
+        assert entry in POLICY_METHODS, (
+            f"Unknown Serena method in convention: {match.group(0)}"
+        )
+
+
+def test_convention_names_both_mcp_tools():
+    """Both MCP tool names appear prefixed in the convention."""
+    text = CONVENTION_FILE.read_text()
+    for name in SERENA_MCP_TOOLS:
         prefixed = SERENA_TOOL_PREFIX + name
         assert prefixed in text, f"{prefixed} missing from {CONVENTION_FILE.name}"
 
 
-def test_convention_names_are_real():
-    """Every mcp__serena__ name in the convention is real or excluded, in the right place."""
-    text = CONVENTION_FILE.read_text()
-    heading = "## Excluded tools"
-    before, _, _ = text.partition(heading)
-
-    all_names = set(REAL_SERENA_TOOLS) | set(SERENA_EXCLUDED_TOOLS)
-    for match in SERENA_NAME_PATTERN.finditer(text):
-        assert match.group(1) in all_names, f"Unknown Serena tool in convention: {match.group(0)}"
-
-    for match in SERENA_NAME_PATTERN.finditer(before):
-        assert match.group(1) in REAL_SERENA_TOOLS, (
-            f"Excluded tool named before '{heading}': {match.group(0)}"
-        )
-
-
-# =============================================================================
-# Excluded names absent from code
-# =============================================================================
+def test_no_hallucinated_mcp_names():
+    """No file under the repo root names an mcp__serena__ tool the REPL lacks."""
+    visited = set()
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SCAN_PRUNED_DIRS]
+        for filename in filenames:
+            path = Path(dirpath) / filename
+            if path.suffix not in SCAN_SUFFIXES:
+                continue
+            visited.add(path)
+            text = path.read_text(errors="replace")
+            for match in SERENA_NAME_PATTERN.finditer(text):
+                assert match.group(1) in REAL_SERENA_MCP_TOOLS, (
+                    f"{path} names unknown Serena tool {match.group(0)}"
+                )
+    assert CONVENTION_FILE in visited, "repo walk missed the convention file"
 
 
-def test_excluded_names_absent():
-    """Excluded Serena tool names never appear (prefixed) outside their sanctioned homes."""
-    for path in AGENTS_DIR.glob("*.md"):
-        text = path.read_text()
-        assert not EXCLUDED_PATTERN.search(text), f"{path} references an excluded Serena tool"
-
-    for path in CONVENTIONS_DIR.glob("*.md"):
-        if path == CONVENTION_FILE:
-            continue
-        text = path.read_text()
-        assert not EXCLUDED_PATTERN.search(text), f"{path} references an excluded Serena tool"
-
-    convention_text = CONVENTION_FILE.read_text()
-    before, _, _ = convention_text.partition("## Excluded tools")
-    assert not EXCLUDED_PATTERN.search(before), (
-        "Excluded Serena tool referenced before the Excluded tools heading"
-    )
-
-    serena_module = SKILLS_DIR / "lib" / "workflow" / "prompts" / "serena.py"
-    for path in SKILLS_DIR.rglob("*.py"):
-        if path == serena_module:
-            continue
-        text = path.read_text()
-        assert not EXCLUDED_PATTERN.search(text), f"{path} references an excluded Serena tool"
+def test_preamble_methods_are_known():
+    """Every s.<facade>.<method> name in a preamble is a policy method."""
+    for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE):
+        for match in FACADE_METHOD_PATTERN.finditer(preamble):
+            entry = f"{match.group(1)}.{match.group(2)}"
+            assert entry in POLICY_METHODS, f"Unknown method in preamble: {match.group(0)}"
 
 
 # =============================================================================
@@ -275,7 +313,7 @@ def test_excluded_names_absent():
 
 
 def test_forbidden_phrases_absent():
-    """Pre-Serena tool phrasing does not reappear in skill scripts."""
+    """Phrasing that routes code reads or edits around Serena is absent from skill scripts."""
     for path in SKILLS_DIR.rglob("*.py"):
         text = path.read_text()
         for phrase in FORBIDDEN_PHRASES:
@@ -289,19 +327,33 @@ def test_forbidden_phrases_absent():
 
 def test_preambles_have_no_braces():
     """Preambles are plain concatenated strings, never passed through .format()."""
+    # REPL examples in the preambles are keyword calls, never dict or set
+    # literals, so no brace can appear.
     assert "{" not in SERENA_READ_PREAMBLE
     assert "}" not in SERENA_READ_PREAMBLE
     assert "{" not in SERENA_EDIT_PREAMBLE
     assert "}" not in SERENA_EDIT_PREAMBLE
 
 
-def test_preambles_contain_load_hint():
+def test_role_clauses_select_variant():
+    """Each preamble carries its own role clause and not the other's."""
+    assert SERENA_READ_ROLE_RULE in SERENA_READ_PREAMBLE
+    assert SERENA_READ_ROLE_RULE not in SERENA_EDIT_PREAMBLE
+    assert SERENA_EDIT_ROLE_RULE in SERENA_EDIT_PREAMBLE
+    assert SERENA_EDIT_ROLE_RULE not in SERENA_READ_PREAMBLE
+    assert "no s.edit" in SERENA_READ_ROLE_RULE
+
+
+def test_preambles_contain_load_hint_and_fallback():
     """Each preamble carries its ToolSearch hint and the fallback clause,
-    so the policy still works if Claude Code ever defers allowlisted MCP
-    tools the way it defers unlisted ones."""
+    so the policy still works if Claude Code defers the MCP tools."""
     for preamble in (SERENA_READ_PREAMBLE, SERENA_EDIT_PREAMBLE):
-        assert "ToolSearch" in preamble
+        assert SERENA_LOAD_HINT in preamble
         assert SERENA_FALLBACK in preamble
+    assert "ToolSearch" in SERENA_LOAD_HINT
+    for name in SERENA_MCP_TOOLS:
+        assert SERENA_TOOL_PREFIX + name in SERENA_LOAD_HINT
+    assert SERENA_TOOL_PREFIX + "serena_repl" in SERENA_FALLBACK
 
 
 # =============================================================================
